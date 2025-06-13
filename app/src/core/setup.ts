@@ -9,13 +9,16 @@ import "@babylonjs/core/Animations/animatable.core";
 import "@babylonjs/loaders/glTF";
 import "@babylonjs/core/Misc/screenshotTools";
 
-DracoDecoder.DefaultConfiguration.wasmUrl = "/draco/draco_wasm_wrapper_gltf.js";
-DracoDecoder.DefaultConfiguration.wasmBinaryUrl = "/draco/draco_decoder_gltf.wasm";
-DracoDecoder.DefaultConfiguration.fallbackUrl = "/draco/draco_decoder_gltf.js";
+DracoDecoder.DefaultConfiguration.wasmUrl =
+  import.meta.env.VITE_APP_BASE_DIR + "draco/draco_wasm_wrapper_gltf.js";
+DracoDecoder.DefaultConfiguration.wasmBinaryUrl =
+  import.meta.env.VITE_APP_BASE_DIR + "draco/draco_decoder_gltf.wasm";
+DracoDecoder.DefaultConfiguration.fallbackUrl =
+  import.meta.env.VITE_APP_BASE_DIR + "draco/draco_decoder_gltf.js";
 
 if (import.meta.env.PROD) {
   Sentry.init({
-    dsn: "https://c0f093481269df2f698aecc92c1c3fae@o480185.ingest.us.sentry.io/4509382132039680",
+    dsn: import.meta.env.VITE_APP_SENTRY_DSN,
     environment: import.meta.env.MODE,
     sendDefaultPii: false,
   });

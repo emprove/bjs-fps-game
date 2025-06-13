@@ -6,7 +6,7 @@ import HavokPhysics from "@babylonjs/havok";
 export const initializePhysics = async (scene: Scene) => {
   try {
     const havokInstance = await HavokPhysics({
-      locateFile: () => "/HavokPhysics.wasm",
+      locateFile: () => import.meta.env.VITE_APP_BASE_DIR + "HavokPhysics.wasm",
     });
 
     const gravityVector = new Vector3(0, -9.81, 0);
