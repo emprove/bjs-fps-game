@@ -2,6 +2,8 @@
 
 3D mini FPS game.
 
+[Play online](https://emprove.dev/rdn/)
+
 BabylonJS engine. Havok physics. Vitejs.
 
 <img src="app/src/assets/images/uno_garden_scene_preview.webp" width="768">
