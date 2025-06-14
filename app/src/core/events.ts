@@ -11,6 +11,7 @@ import { Button } from "@babylonjs/gui/2D/controls/button";
 import { lang } from "../lang";
 import { PLAYABLE_SCENE_INDEX } from "./engine";
 import { MenuUI } from "../app/menuUI";
+import { device } from "../lib/deviceDetection";
 
 export function registerEvents(
   canvas: HTMLCanvasElement,
@@ -21,7 +22,9 @@ export function registerEvents(
 ) {
   emitter.on("load-scene", async (evt: any) => {
     const name = evt as string;
-    RequestPointerlock(canvas);
+    if (device.isDesktop) {
+      RequestPointerlock(canvas);
+    }
     if (options.fullscreen) {
       RequestFullscreen(appEl);
     }
@@ -65,7 +68,9 @@ export function registerEvents(
     setCurrentSceneIndex(PLAYABLE_SCENE_INDEX);
     engine.scenes[getCurrentSceneIndex()].physicsEnabled = true;
     options.volume = options.volume;
-    RequestPointerlock(canvas);
+    if (device.isDesktop) {
+      RequestPointerlock(canvas);
+    }
     if (options.fullscreen) {
       RequestFullscreen(appEl);
     }
