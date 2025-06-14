@@ -528,7 +528,7 @@ export class Player {
     const rect = canvas.getBoundingClientRect();
 
     let clientX, clientY;
-    if (e instanceof TouchEvent) {
+    if (typeof TouchEvent !== "undefined" && e instanceof TouchEvent) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
     } else if (e instanceof PointerEvent) {
