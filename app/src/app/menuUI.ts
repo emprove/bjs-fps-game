@@ -29,14 +29,20 @@ import bgRdnImg from "../assets/textures/bg_rdn.jpg";
 
 export class MenuUI {
   #audioEngine: AudioEngineV2;
+  #scene: Scene;
+  #canvasWidth: number;
+  #canvasHeight: number;
   #maxContainerWidthInPx: number;
   public adt: AdvancedDynamicTexture;
 
   constructor(scene: Scene, audioEngine: AudioEngineV2) {
+    this.#scene = scene;
     this.#audioEngine = audioEngine;
+    this.#canvasWidth = this.#scene.getEngine().getRenderingCanvas().width;
+    this.#canvasHeight = this.#scene.getEngine().getRenderingCanvas().height;
 
     const imageAspectRatio = 1920 / 1200;
-    const deviceAspectRatio = window.screen.width / window.screen.availHeight;
+    const deviceAspectRatio = this.#canvasWidth / this.#canvasHeight;
     const deviceAspectCorrection = deviceAspectRatio / imageAspectRatio;
     const fullscreenAspectCorrection = 1.1;
 
@@ -88,17 +94,19 @@ export class MenuUI {
   }
 
   private adaptiveStack() {
-    this.adt.idealWidth = window.screen.width;
-    this.adt.idealHeight = window.screen.availHeight;
+    this.#canvasWidth = this.#scene.getEngine().getRenderingCanvas().width;
+    this.#canvasHeight = this.#scene.getEngine().getRenderingCanvas().height;
+    this.adt.idealWidth = this.#canvasWidth;
+    this.adt.idealHeight = this.#canvasHeight;
     this.setMaxContainerWidth();
   }
 
   private setMaxContainerWidth() {
-    const isLandscapeMode = window.screen.availWidth > window.screen.availHeight;
+    const isLandscapeMode = this.#canvasWidth > this.#canvasHeight;
     if (device.isMobile) {
-      this.#maxContainerWidthInPx = isLandscapeMode ? 320 : window.screen.availWidth - 80;
+      this.#maxContainerWidthInPx = isLandscapeMode ? 320 : this.#canvasWidth - 80;
     } else {
-      this.#maxContainerWidthInPx = window.screen.availWidth > 720 ? 480 : 320;
+      this.#maxContainerWidthInPx = this.#canvasWidth > 720 ? 480 : 320;
     }
   }
 

@@ -12,7 +12,6 @@ BabylonJS engine. Havok physics. Vitejs.
 
 1. Firefox (mobile): moving and looking around sticks is not working simultaneously (pointer events issue).
 1. Firefox (mobile,desktop): spatial sounds not working (Web Audio API issue).
-1. Brave (desktop): incorrect main menu render size (too small).
 
 I'll fix it. Some day.
 
