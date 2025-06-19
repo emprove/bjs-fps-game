@@ -409,7 +409,7 @@ export class MenuUI {
     showFpsCheckbox.height = "20px";
     showFpsCheckbox.isChecked = options.showFps;
     showFpsCheckbox.color = "green";
-    showFpsCheckbox.onIsCheckedChangedObservable.add(async (value) => {
+    showFpsCheckbox.onIsCheckedChangedObservable.add((value) => {
       options.showFps = value;
     });
 
@@ -424,7 +424,7 @@ export class MenuUI {
     showFpsCheckboxText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     showFpsCheckboxText.color = "white";
     showFpsCheckboxText.isPointerBlocker = true;
-    showFpsCheckboxText.onPointerDownObservable.add(async () => {
+    showFpsCheckboxText.onPointerDownObservable.add(() => {
       showFpsCheckbox.isChecked = !showFpsCheckbox.isChecked;
     });
 
