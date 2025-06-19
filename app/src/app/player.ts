@@ -138,7 +138,7 @@ export class Player {
     this.#sceneUI.adt.addControl(this.#handImage);
   }
 
-  public init() {
+  public init(): void {
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (device.isMobile) {
       canvas.addEventListener("touchstart", (e) => this.onTouchOrClickEvent(e));
@@ -338,7 +338,7 @@ export class Player {
     });
   }
 
-  private initSprintAndJumpButtons() {
+  private initSprintAndJumpButtons(): void {
     const walkButtonContainer = new Ellipse("walkButtonContainer");
     this.#sceneUI.adt.addControl(walkButtonContainer);
 
@@ -407,7 +407,7 @@ export class Player {
     jumpButton.thickness = 0;
   }
 
-  private initDesktopControls() {
+  private initDesktopControls(): void {
     this.#scene.onKeyboardObservable.add((kbInfo) => {
       switch (kbInfo.type) {
         case KeyboardEventTypes.KEYDOWN:
@@ -493,7 +493,7 @@ export class Player {
     });
   }
 
-  public setPosition(position: Vector3) {
+  public setPosition(position: Vector3): void {
     if (this.physicsAggregate) {
       this.physicsAggregate.dispose();
     }
@@ -523,7 +523,7 @@ export class Player {
     this.command.cameraBeta = camera.beta;
   }
 
-  private onTouchOrClickEvent(e: TouchEvent | PointerEvent) {
+  private onTouchOrClickEvent(e: TouchEvent | PointerEvent): void {
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     const rect = canvas.getBoundingClientRect();
 
@@ -596,7 +596,7 @@ export class Player {
     }
   }
 
-  private grabObject(grabbedMesh: Mesh) {
+  private grabObject(grabbedMesh: Mesh): void {
     this.#grabbedObject = grabbedMesh;
     grabbedMesh.metadata = {
       ...grabbedMesh.metadata,
@@ -616,7 +616,7 @@ export class Player {
     emitter.emit("player_object_grabbed", grabbedMesh.uniqueId);
   }
 
-  public dropObject() {
+  public dropObject(): void {
     if (!this.#grabbedObject) {
       return;
     }
@@ -636,7 +636,7 @@ export class Player {
     this.#grabbedObject = obj;
   }
 
-  public update() {
+  public update(): void {
     this.updatePlayerGroundRay();
     this.updatePlayerTargetRay();
     this.updateRayBasedFeatures();
@@ -673,7 +673,7 @@ export class Player {
     }
   }
 
-  private applyMovement() {
+  private applyMovement(): void {
     // ground-check ray
     if (this.#playerGroundRay.hasHit) {
       this.#inAir = false;
@@ -692,7 +692,7 @@ export class Player {
     const viewAngleY = 2 * Math.PI - this.command.cameraAlpha;
     this.mesh.rotationQuaternion = Quaternion.FromEulerAngles(0, viewAngleY, 0);
 
-    // build local-space input vector (X = right/left, Z = forward/back)
+    // input vector
     const localDir = new Vector3(
       -((this.command.moveForwardKeyDown ? 1 : 0) - (this.command.moveBackwardKeyDown ? 1 : 0)),
       0,
@@ -707,10 +707,9 @@ export class Player {
     const speedMag = oldVel.length();
     const canJump = this.#playerGroundRay.hasHit || speedMag < 0.001;
 
-    // decide your new Y velocity: jump vs keep falling/rising
     let newVelY = oldVel.y;
     if (this.command.jumpKeyDown && canJump && !this.#inAir) {
-      newVelY = 5; // your jump impulse in m/s
+      newVelY = 5; // jump impulse
       this.#inAir = true;
       this.groundRayPickState.collidedAt = 0;
       this.groundRayPickState.collidedWith = null;
@@ -722,8 +721,7 @@ export class Player {
       Matrix.RotationAxis(Axis.Y, viewAngleY),
     );
 
-    // compute a true “metres per second” speed
-    const speedBase = this.command.sprint ? 9.0 : 6.0; // m/s
+    const speedBase = this.command.sprint ? 9.0 : 6.0;
     const platformFactor = device.isDesktop ? 1.0 : 0.8;
     const speed = speedBase * platformFactor;
 
@@ -731,7 +729,6 @@ export class Player {
     const newVelX = worldDir.x * speed;
     const newVelZ = worldDir.z * speed;
 
-    // commit it all in one go
     this.physicsAggregate.body.setLinearVelocity(new Vector3(newVelX, newVelY, newVelZ));
 
     // stick to moving platforms if needed

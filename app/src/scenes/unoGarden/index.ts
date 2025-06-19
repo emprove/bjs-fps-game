@@ -533,7 +533,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private setupColorsTextureBlinkingMaterial(scene: Scene, originalMaterial: PBRMaterial) {
+  private setupColorsTextureBlinkingMaterial(scene: Scene, originalMaterial: PBRMaterial): void {
     const colorsTextureMaterialBlink = originalMaterial.clone("colors_texture_blink");
     colorsTextureMaterialBlink.emissiveColor = Color3.Black();
     colorsTextureMaterialBlink.emissiveIntensity = 0.5;
@@ -557,7 +557,7 @@ class SecondScene implements CreateSceneClass {
     scene.beginAnimation(colorsTextureMaterialBlink, 0, 10, true, 0.5);
   }
 
-  private setupTorusActivityAnimation(scene: Scene) {
+  private setupTorusActivityAnimation(scene: Scene): void {
     const activityTorusMat = new StandardMaterial("activityTorusMat");
     activityTorusMat.pointsCloud = true;
     activityTorusMat.pointSize = device.isMobile ? 1.5 : 1;
@@ -593,7 +593,7 @@ class SecondScene implements CreateSceneClass {
       });
   }
 
-  private setupFinalGazeboLights(scene: Scene) {
+  private setupFinalGazeboLights(scene: Scene): void {
     const lanternMat = new StandardMaterial("lanternMat");
     lanternMat.diffuseColor = new Color3(1, 0.95, 0.9);
     lanternMat.backFaceCulling = false;
@@ -617,7 +617,7 @@ class SecondScene implements CreateSceneClass {
     spotTwo.intensity = 0;
   }
 
-  private spawnStars(scene: Scene) {
+  private spawnStars(scene: Scene): void {
     const starCount = 100;
     const radius = 800;
     const yCenter = 150;
@@ -655,7 +655,7 @@ class SecondScene implements CreateSceneClass {
     }
   }
 
-  private async changeDaytime(scene: Scene, reverse: boolean) {
+  private async changeDaytime(scene: Scene, reverse: boolean): Promise<void> {
     const frameRate = 10;
     const startFrame = reverse ? frameRate : 0;
     const endFrame = reverse ? 0 : frameRate;
@@ -894,7 +894,7 @@ class SecondScene implements CreateSceneClass {
     lanternMat.emissiveColor = new Color3(0.6, 0.4, 0.2);
   }
 
-  private setupCakeAction(scene: Scene) {
+  private setupCakeAction(scene: Scene): void {
     const fireworkLight = scene.getLightByName("firework_point_light");
     fireworkLight.intensity = 0;
 
@@ -1003,7 +1003,7 @@ class SecondScene implements CreateSceneClass {
     }, 2000);
   }
 
-  private setupFinalAction(scene: Scene) {
+  private setupFinalAction(scene: Scene): void {
     const finalZoneTriggerBoxMesh = scene.getMeshByName("second_garden_zone_trigger");
     finalZoneTriggerBoxMesh.isVisible = false;
     finalZoneTriggerBoxMesh.isPickable = true;
@@ -1023,7 +1023,7 @@ class SecondScene implements CreateSceneClass {
     this.#player.mesh.actionManager.registerAction(finalZoneAction);
   }
 
-  private setupSecretPlacesAction(scene: Scene) {
+  private setupSecretPlacesAction(scene: Scene): void {
     if (!this.#player.mesh.actionManager) {
       this.#player.mesh.actionManager = new ActionManager(scene);
     }
@@ -1048,7 +1048,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private setupOutroSoundAction(scene: Scene) {
+  private setupOutroSoundAction(scene: Scene): void {
     if (!this.#player.mesh.actionManager) {
       this.#player.mesh.actionManager = new ActionManager(scene);
     }
@@ -1077,7 +1077,7 @@ class SecondScene implements CreateSceneClass {
     this.#player.mesh.actionManager.registerAction(playerEntersFinalZoneSoundAction);
   }
 
-  private setupMicrowaveCollision() {
+  private setupMicrowaveCollision(): void {
     emitter.on("player_picked_object", (transformNode) => {
       const node = transformNode as TransformNode;
       if (node.name.includes("microwave")) {
@@ -1086,7 +1086,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private async setupSounds(scene: Scene) {
+  private async setupSounds(scene: Scene): Promise<void> {
     const soundPromises = [
       this.#audioEngine.createSoundAsync("bgBirdsSound", bgBirdsAudio).then((sound) => {
         this.#sounds.set("bgBirdsSound", sound);
@@ -1214,7 +1214,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private setupStatueBuddaActivity(scene: Scene) {
+  private setupStatueBuddaActivity(scene: Scene): void {
     const statueBudda = scene.getMeshByName("statue_budda") as Mesh;
     statueBudda.metadata = {};
     statueBudda.metadata.isTouchable = true;
@@ -1263,7 +1263,7 @@ class SecondScene implements CreateSceneClass {
     return random.lines.join("\n");
   }
 
-  private setupToroHokkuActivity(scene: Scene) {
+  private setupToroHokkuActivity(scene: Scene): void {
     const hokkuHideTimeout = 10000;
     const toroSmall001 = scene.getMeshByName("toro_small.001") as Mesh;
     toroSmall001.metadata = {};
@@ -1363,7 +1363,7 @@ class SecondScene implements CreateSceneClass {
     };
   }
 
-  private setupToroActivity(scene: Scene) {
+  private setupToroActivity(scene: Scene): void {
     const toro = scene.getMeshByName("toro_small") as Mesh;
     toro.metadata = {};
     toro.metadata.isTouchable = true;
@@ -1419,7 +1419,7 @@ class SecondScene implements CreateSceneClass {
     throw new Error("unknown previous card type: " + previousType);
   }
 
-  private unoNextTurn(scene: Scene, currentToro: Mesh) {
+  private unoNextTurn(scene: Scene, currentToro: Mesh): void {
     ++this.#unoGameState.turn;
 
     console.log("turn changed to", this.#unoGameState.turn);
@@ -1482,7 +1482,7 @@ class SecondScene implements CreateSceneClass {
     return matchingCard;
   }
 
-  private openGateDoors(scene: Scene) {
+  private openGateDoors(scene: Scene): void {
     console.log("open doors");
 
     const frameRate = 10;
@@ -1500,8 +1500,8 @@ class SecondScene implements CreateSceneClass {
     oldDoorTall.unfreezeWorldMatrix();
     oldDoorTallReversed.unfreezeWorldMatrix();
 
-    const targetRotationTall = Quaternion.FromEulerAngles(0, -Math.PI / 2, Math.PI); // Rotate -90 degrees on Y
-    const targetRotationTallReversed = Quaternion.FromEulerAngles(0, Math.PI / 2, Math.PI); // Rotate 90 degrees on Y
+    const targetRotationTall = Quaternion.FromEulerAngles(0, -Math.PI / 2, Math.PI);
+    const targetRotationTallReversed = Quaternion.FromEulerAngles(0, Math.PI / 2, Math.PI);
 
     const doorTallAnimation = new Animation(
       "doorTallRotation",
@@ -1549,7 +1549,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private async unoEndGame() {
+  private async unoEndGame(): Promise<boolean> {
     return new Promise((resolve) => {
       const sound = this.#sounds.get("unoGameEndSound");
       sound.onEndedObservable.addOnce(() => {
@@ -1565,7 +1565,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private attachUnoCardToToro(card: AbstractMesh, toroMesh: AbstractMesh) {
+  private attachUnoCardToToro(card: AbstractMesh, toroMesh: AbstractMesh): void {
     card.setParent(toroMesh);
     card.position = this.calcCardToroPosition(card, toroMesh);
     card.rotation.y = -(Math.PI * 90) / 180;
@@ -1582,7 +1582,7 @@ class SecondScene implements CreateSceneClass {
     return new Vector3(0, maxY, 0);
   }
 
-  private async unoOpponentMove(scene: Scene, currentToro: Mesh) {
+  private async unoOpponentMove(scene: Scene, currentToro: Mesh): Promise<void> {
     console.log("opponent move");
 
     let card;
@@ -1614,7 +1614,7 @@ class SecondScene implements CreateSceneClass {
     }
   }
 
-  private async animateCardFly(scene: Scene, card: Mesh, endPosition: Vector3) {
+  private async animateCardFly(scene: Scene, card: Mesh, endPosition: Vector3): Promise<boolean> {
     return new Promise((resolve) => {
       const frameRate = 20;
       const easingFunction = new SineEase();
@@ -1642,7 +1642,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private async unoStartGame(scene: Scene) {
+  private async unoStartGame(scene: Scene): Promise<void> {
     this.#unoGameState.turn = 1;
 
     console.log("uno game started");
@@ -1751,7 +1751,7 @@ class SecondScene implements CreateSceneClass {
     return regularUnoCards[randomIndex] as Mesh;
   }
 
-  private async setupUnoCards(scene: Scene) {
+  private async setupUnoCards(scene: Scene): Promise<void> {
     const texture = new Texture(unoCardsAtlas, scene);
     const cardMat = new StandardMaterial("cardMat", scene);
     cardMat.diffuseTexture = texture;
@@ -1993,11 +1993,7 @@ class SecondScene implements CreateSceneClass {
       .map((o) => o.n);
   }
 
-  public randomRange(min: number, max: number): number {
-    return Math.random() * (max - min) + min;
-  }
-
-  public spawnClouds(scene: Scene, baseCloud: Mesh, count: number): void {
+  private spawnClouds(scene: Scene, baseCloud: Mesh, count: number): void {
     const cloudsData: {
       mesh: InstancedMesh;
       speedZ: number;
@@ -2008,18 +2004,22 @@ class SecondScene implements CreateSceneClass {
     const endZ = 1000;
     const frameRate = 15;
 
+    function randomRange(min: number, max: number): number {
+      return Math.random() * (max - min) + min;
+    }
+
     for (let i = 0; i < count; i++) {
       const cloudClone = baseCloud.createInstance(`cloud_${i}`);
       cloudClone.isPickable = false;
       cloudClone.checkCollisions = false;
       cloudClone.visibility = 1;
 
-      const startX = this.randomRange(-500, 500);
-      const startY = this.randomRange(60, 200);
-      const startZ = this.randomRange(-500, 500);
+      const startX = randomRange(-500, 500);
+      const startY = randomRange(60, 200);
+      const startZ = randomRange(-500, 500);
       cloudClone.position.set(startX, startY, startZ);
 
-      const speedZ = this.randomRange(0.075, 0.15);
+      const speedZ = randomRange(0.075, 0.15);
       cloudsData.push({
         mesh: cloudClone,
         speedZ,
@@ -2046,7 +2046,7 @@ class SecondScene implements CreateSceneClass {
     }
   }
 
-  private setupLODMeshes(scene: Scene) {
+  private setupLODMeshes(scene: Scene): void {
     const grass2JA = scene.getMeshByName("Grass_2JA") as Mesh;
     grass2JA.setEnabled(false);
     const grass2JALOD = scene.getMeshByName("Grass_2JA_LOD") as Mesh;

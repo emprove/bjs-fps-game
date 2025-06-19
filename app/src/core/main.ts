@@ -41,7 +41,7 @@ const loadSceneIfParamInURI = async () => {
   }
 };
 
-export async function bootApp() {
+export async function bootApp(): Promise<void> {
   createPwaToast(appEl);
   createLoader(appEl, import.meta.env.VITE_PWA_ICON_192);
   setFavicon(import.meta.env.VITE_PWA_ICON_192, "icon");

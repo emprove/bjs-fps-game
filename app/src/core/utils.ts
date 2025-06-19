@@ -3,7 +3,7 @@ import unoGardenScenePreview from "../assets/images/uno_garden_scene_preview.web
 export const getSceneNameFromURI = (): string | undefined =>
   location.search.split("scene=")[1]?.split("&")[0] || undefined;
 
-export function setFavicon(href: string, rel: string) {
+export function setFavicon(href: string, rel: string): void {
   const link = document.createElement("link");
   link.rel = rel;
   link.type = "image/png";

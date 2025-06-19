@@ -29,7 +29,7 @@ export class SceneUI {
     this.adt = AdvancedDynamicTexture.CreateFullscreenUI("sceneUI", true, scene);
   }
 
-  init() {
+  public init(): void {
     const menuButtonContainer = new Container("menuButtonContainer");
     this.adt.addControl(menuButtonContainer);
 
@@ -145,7 +145,7 @@ export class SceneUI {
     });
   }
 
-  private changePixelDensity(val: number) {
+  private changePixelDensity(val: number): Promise<boolean> {
     return new Promise((resolve) => {
       this.#engine.setHardwareScalingLevel(val);
       this.adt.renderScale = this.#engine.getHardwareScalingLevel();
@@ -153,7 +153,7 @@ export class SceneUI {
     });
   }
 
-  private async screenshot() {
+  private async screenshot(): Promise<void> {
     await this.changePixelDensity(1 / window.devicePixelRatio);
     this.adt.executeOnAllControls((control) => (control.isVisible = !control.isVisible));
 
