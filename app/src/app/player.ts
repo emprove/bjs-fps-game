@@ -688,7 +688,7 @@ export class Player {
       this.groundRayPickState.collidedWith = null;
     }
 
-    // face the camera’s heading
+    // face the camera's heading
     const viewAngleY = 2 * Math.PI - this.command.cameraAlpha;
     this.mesh.rotationQuaternion = Quaternion.FromEulerAngles(0, viewAngleY, 0);
 

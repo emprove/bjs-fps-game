@@ -7,17 +7,14 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3, Quaternion } from "@babylonjs/core/Maths/math.vector";
-import { VertexBuffer } from "@babylonjs/core/Buffers";
 import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate";
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
-import { ColorGradingTexture } from "@babylonjs/core/Materials/Textures/colorGradingTexture";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { InstancedMesh } from "@babylonjs/core/Meshes/instancedMesh";
-import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Animation } from "@babylonjs/core/Animations/animation";
@@ -33,9 +30,12 @@ import "@babylonjs/core/Particles/webgl2ParticleSystem";
 import { GPUParticleSystem } from "@babylonjs/core/Particles/gpuParticleSystem";
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { ReflectionProbe } from "@babylonjs/core/Probes/reflectionProbe";
+import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
+import { ColorGradingTexture } from "@babylonjs/core/Materials/Textures/colorGradingTexture";
+import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { AudioEngineV2 } from "@babylonjs/core/AudioV2/abstractAudio/audioEngineV2";
 // app
-import { CreateSceneClass } from "../../core/createScene";
+import { GameScene } from "../../core/createScene";
 import { Player } from "../../app/player";
 import { Camera } from "../../app/camera";
 import { SceneUI } from "../../app/sceneUI";
@@ -43,6 +43,7 @@ import { initializePhysics } from "../../app/physics";
 import { emitter } from "../../lib/emitter";
 import { device } from "../../lib/deviceDetection";
 import { DeltaTimeAverager } from "../../app/deltaTimeAverager";
+import { UnoGame } from "./unoGame";
 // assets
 import lutAsset from "../../assets/luts/standard_warm.3dl?url";
 import cubeNX from "../../assets/cubemaps/sunrise_pure_sky_green_ground_20el/nx.webp";
@@ -52,7 +53,6 @@ import cubePX from "../../assets/cubemaps/sunrise_pure_sky_green_ground_20el/px.
 import cubePY from "../../assets/cubemaps/sunrise_pure_sky_green_ground_20el/py.webp";
 import cubePZ from "../../assets/cubemaps/sunrise_pure_sky_green_ground_20el/pz.webp";
 import unoGardenGlb from "../../assets/uno_garden.glb?url";
-import unoCardsAtlas from "../../assets/textures/uno_cards_atlas.png";
 import starImg from "../../assets/textures/star.png";
 import star2Img from "../../assets/textures/star2.png";
 import cardGrabAudio from "../../assets/sounds/card_grab.mp3";
@@ -72,31 +72,14 @@ import fireworkBangAudio from "../../assets/sounds/firework_bang.mp3";
 import fireworkRocketAudio from "../../assets/sounds/firework_rocket.mp3";
 import hokkuData from "../../assets/misc/hokku.json";
 
-type Engine = import("@babylonjs/core/Engines/engine").Engine;
+export type SoundPool = Map<string, AbstractSound>;
 
-class SecondScene implements CreateSceneClass {
+class UnoGardenScene implements GameScene {
+  #scene: Scene;
   #audioEngine: AudioEngineV2;
   #player: Player;
-  #sounds: Map<string, AbstractSound> = new Map();
-  #unoGameState = {
-    turn: 0,
-    maxTurns: 6,
-  };
-  #unoDeck: { [name: string]: Mesh } = {};
-  #deckOfRegularUnoCardNames: string[];
-  #dragonTextBlock: TextBlock;
-  #dragonTextReplicas = [
-    "I'm an very, very old rake.",
-    "What a sunny day! Say cheeese!",
-    "When I was young... I was young.",
-    "Please, don't cheat! You must win fair and square, and I will open the doors.",
-    "Драконы существуют! Я статуя, из камня и краски, это доказываю.",
-    "Статуя будды говорит по-китайски и может помочь с игрой.",
-    "Есть тут один светильник... творит магию.",
-    "I know, I know... there is a hole to other side. What? Nothing.",
-    "Я совершал сотни ошибок. Поэтому я стал мудрым Драконом.",
-    "I shuffle cards better than I shuffle fates.",
-  ];
+  #sounds: SoundPool = new Map();
+  #unoGame: UnoGame;
   #chineseLampColor = new Color3(1, 0.85, 0.6);
   #sunLightDayColor = new Color3(1, 0.85, 0.7);
   #sunLightNightColor = new Color3(0.7, 0.9, 0.9);
@@ -107,70 +90,70 @@ class SecondScene implements CreateSceneClass {
   public async init(engine: Engine, audioEngine: AudioEngineV2): Promise<Scene> {
     this.#audioEngine = audioEngine;
 
-    const scene = new Scene(engine, {
+    this.#scene = new Scene(engine, {
       useGeometryUniqueIdsMap: true,
       useMaterialMeshMap: true,
       useClonedMeshMap: true,
     });
     engine.maxFPS = 60;
 
-    scene.fogMode = 2;
-    scene.fogDensity = 0.001;
-    scene.fogColor = this.#fogDayColor;
+    this.#scene.fogMode = 2;
+    this.#scene.fogDensity = 0.001;
+    this.#scene.fogColor = this.#fogDayColor;
 
-    await initializePhysics(scene);
+    await initializePhysics(this.#scene);
 
-    const sceneUI = new SceneUI(engine, scene);
+    const sceneUI = new SceneUI(engine, this.#scene);
     sceneUI.init();
 
-    this.#player = new Player(scene, sceneUI);
+    this.#player = new Player(this.#scene, sceneUI);
     this.#player.init();
     this.#player.setPosition(this.playerSpawnPoint);
     this.#audioEngine.listener.position = this.#player.mesh.position;
     this.#audioEngine.listener.attach(this.#player.mesh);
 
-    const camera = new Camera(scene);
-    scene.activeCamera = camera.camera;
+    const camera = new Camera(this.#scene);
+    this.#scene.activeCamera = camera.camera;
 
     camera.init(this.#player);
     camera.camera.alpha = 4.01;
     camera.camera.beta = 1.546;
     this.#player.syncCameraAlphaBetaWithCommand(camera.camera);
 
-    const sunLight = new DirectionalLight("sunLight", new Vector3(-150, -100, 200), scene);
+    const sunLight = new DirectionalLight("sunLight", new Vector3(-150, -100, 200), this.#scene);
     sunLight.diffuse = this.#sunLightDayColor;
     sunLight.intensity = 1.8;
     sunLight.autoUpdateExtends = true;
     sunLight.shadowMinZ = 100;
     sunLight.shadowMaxZ = 350;
 
-    const sunDisk = MeshBuilder.CreateSphere("sunDisk", { diameter: 20 }, scene);
+    const sunDisk = MeshBuilder.CreateSphere("sunDisk", { diameter: 20 }, this.#scene);
     sunDisk.position = sunLight.direction.scale(-2);
     sunDisk.billboardMode = Mesh.BILLBOARDMODE_ALL;
 
-    const sunMaterial = new StandardMaterial("sunMaterial", scene);
+    const sunMaterial = new StandardMaterial("sunMaterial", this.#scene);
     sunMaterial.emissiveColor = new Color3(1, 1, 1);
     sunMaterial.disableLighting = true;
     sunDisk.material = sunMaterial;
 
-    const backlight = new HemisphericLight("backlight", new Vector3(0, 1, 0), scene);
+    const backlight = new HemisphericLight("backlight", new Vector3(0, 1, 0), this.#scene);
     backlight.diffuse = new Color3(1, 1, 1);
     backlight.groundColor = new Color3(0.5, 0.5, 0.5);
     backlight.intensity = 0.2;
 
     const envTexture = CubeTexture.CreateFromImages(
       [cubePX, cubePY, cubePZ, cubeNX, cubeNY, cubeNZ],
-      scene,
+      this.#scene,
     );
-    scene.environmentTexture = envTexture;
-    scene.environmentIntensity = 3;
+    this.#scene.environmentTexture = envTexture;
+    this.#scene.environmentIntensity = 3;
 
-    const skyBoxMesh = MeshBuilder.CreateBox("skyBoxMesh", { size: 2000 }, scene);
+    const skyBoxMesh = MeshBuilder.CreateBox("skyBoxMesh", { size: 2000 }, this.#scene);
     skyBoxMesh.infiniteDistance = true;
     skyBoxMesh.applyFog = false;
     skyBoxMesh.rotation.y = 1;
 
-    const skyboxMaterial = new StandardMaterial("skyboxMaterial", scene);
+    const skyboxMaterial = new StandardMaterial("skyboxMaterial", this.#scene);
     skyboxMaterial.backFaceCulling = false;
     skyboxMaterial.reflectionTexture = envTexture;
     skyboxMaterial.reflectionTexture.coordinatesMode = Texture.SKYBOX_MODE;
@@ -179,16 +162,16 @@ class SecondScene implements CreateSceneClass {
     skyboxMaterial.disableLighting = true;
     skyBoxMesh.material = skyboxMaterial;
 
-    await Promise.all([AppendSceneAsync(unoGardenGlb, scene)]);
+    await Promise.all([AppendSceneAsync(unoGardenGlb, this.#scene)]);
 
     // fix gltf to bjs coordinate system
-    const rootNode = scene.getNodeByName("__root__");
+    const rootNode = this.#scene.getNodeByName("__root__");
     rootNode.getChildren().forEach((m) => {
       (m as Mesh).setParent(null);
     });
     rootNode.dispose();
 
-    this.setupFinalGazeboLights(scene); // this is must be before all other code
+    this.setupFinalGazeboLights(); // this is must be before all other code
 
     const shadowGenerator = new ShadowGenerator(2048, sunLight);
     shadowGenerator.bias = 0.004;
@@ -196,12 +179,7 @@ class SecondScene implements CreateSceneClass {
     shadowGenerator.usePercentageCloserFiltering = true;
     shadowGenerator.transparencyShadow = true;
 
-    const activeZoneBBoxMesh = scene.getMeshByName("active_zone_bbox") as Mesh;
-    activeZoneBBoxMesh.isPickable = false;
-    activeZoneBBoxMesh.isVisible = false;
-    const activeZoneBBoxMeshBoundingBox = activeZoneBBoxMesh.getBoundingInfo().boundingBox;
-
-    const groundMesh = scene.getMeshByName("ground");
+    const groundMesh = this.#scene.getMeshByName("ground");
     groundMesh.receiveShadows = true;
     groundMesh.checkCollisions = true;
     groundMesh.isPickable = true;
@@ -214,35 +192,348 @@ class SecondScene implements CreateSceneClass {
         friction: 1,
         restitution: 0,
       },
-      scene,
+      this.#scene,
     );
     shadowGenerator.addShadowCaster(groundMesh);
 
-    const colorsTextureMaterial = scene.getMaterialByName("colors_texture") as PBRMaterial;
+    const colorsTextureMaterial = this.#scene.getMaterialByName("colors_texture") as PBRMaterial;
     colorsTextureMaterial.roughness = 0.95;
     colorsTextureMaterial.maxSimultaneousLights = 10;
     colorsTextureMaterial.freeze();
 
-    const probe = new ReflectionProbe("mainProbe", 128, scene);
+    const probe = new ReflectionProbe("mainProbe", 128, this.#scene);
     probe.position = new Vector3(0, 10, 0);
     probe.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
     probe.renderList.push(skyBoxMesh);
 
     colorsTextureMaterial.reflectionTexture = probe.cubeTexture;
 
-    this.setupColorsTextureBlinkingMaterial(scene, colorsTextureMaterial);
+    this.setupColorsTextureBlinkingMaterial(colorsTextureMaterial);
 
-    const groundBigMesh = scene.getMeshByName("ground_big");
+    const groundBigMesh = this.#scene.getMeshByName("ground_big");
     groundBigMesh.receiveShadows = true;
     groundBigMesh.checkCollisions = false;
     groundBigMesh.isPickable = false;
     groundBigMesh.freezeWorldMatrix();
 
-    const meshesToMerge = scene.meshes.filter(
+    this.mergeMeshes();
+    this.setupMeshesShadowPhysics(shadowGenerator);
+
+    const water = this.#scene.getMeshByName("water_0");
+    water.isPickable = false;
+    water.position.y = 0;
+    water.receiveShadows = true;
+
+    const waterMaterial = new StandardMaterial("waterMat");
+    waterMaterial.diffuseColor = new Color3(0.05, 0.2, 0);
+    waterMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
+    waterMaterial.reflectionTexture = probe.cubeTexture;
+    waterMaterial.reflectionTexture.level = 0.7;
+    waterMaterial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
+    waterMaterial.alpha = 0.8;
+    waterMaterial.disableLighting = true;
+
+    water.material = waterMaterial;
+
+    const water1 = this.#scene.getMeshByName("water_1");
+    water1.isPickable = false;
+    water1.receiveShadows = true;
+    water1.material = waterMaterial;
+
+    const underwaterGround = this.#scene.getMeshByName("underwater_ground");
+    underwaterGround.receiveShadows = true;
+
+    new PhysicsAggregate(
+      underwaterGround,
+      PhysicsShapeType.BOX,
+      { mass: 0, friction: 1, restitution: 0 },
+      this.#scene,
+    );
+
+    const cloudMesh = this.#scene.getMeshByName("cloud_big") as Mesh;
+    cloudMesh.isVisible = false;
+    cloudMesh.isPickable = false;
+    cloudMesh.checkCollisions = false;
+
+    const cloudMatetial = new StandardMaterial("cloudMatetial");
+    cloudMatetial.emissiveColor = new Color3(1, 1, 1);
+    cloudMatetial.alpha = 0.55;
+    cloudMatetial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
+
+    cloudMesh.material = cloudMatetial;
+
+    const dragonTriggerZone = this.#scene.getMeshByName("dragon_trigger_zone");
+    dragonTriggerZone.checkCollisions = true;
+    dragonTriggerZone.isVisible = false;
+
+    this.#unoGame = new UnoGame(this.#scene, this.#sounds);
+    this.#unoGame.init();
+
+    this.setupRenderingPipeline();
+    this.spawnClouds(cloudMesh, 50);
+    this.setupLODMeshes();
+    this.setupToroActivity();
+    this.setupStatueBuddaActivity();
+    this.setupToroHokkuActivity();
+    await this.setupSounds();
+    this.setupOutroSoundAction();
+    this.setupMicrowaveCollision();
+    this.setupSecretPlacesAction();
+    this.setupTorusActivityAnimation();
+    this.setupCakeAction();
+    this.spawnStars();
+    this.setupFinalAction();
+
+    // runtime logic
+    this.#scene.onBeforeRenderObservable.add(() => {
+      if (this.#player.mesh.position.y < -10) {
+        this.#player.setPosition(this.playerSpawnPoint);
+      }
+    });
+
+    this.#scene.onBeforeRenderObservable.add(async () => {
+      if (
+        this.#unoGame.getGameState().turn === 0 &&
+        this.#player.mesh.intersectsMesh(dragonTriggerZone)
+      ) {
+        console.log("dragon zone triggered");
+        await this.#unoGame.startGame();
+      }
+    });
+
+    this.#scene.onBeforeRenderObservable.add(async () => {
+      if (this.#unoGame.getGameState().turn === 0) {
+        return;
+      }
+
+      if (this.#player.getGrabbedObject() === undefined) {
+        return;
+      }
+
+      let currentToro = this.#scene.getMeshByName(
+        "toro_gaming." + this.#unoGame.getGameState().turn,
+      ) as Mesh;
+      const grabbedCard = this.#player.getGrabbedObject();
+
+      if (grabbedCard.intersectsMesh(currentToro)) {
+        const previousToro = this.#scene.getMeshByName(
+          "toro_gaming." + (this.#unoGame.getGameState().turn - 1),
+        );
+        const previousToroCard = previousToro.getChildren()[0] as Mesh;
+        const matched = this.#unoGame.checkCardIsMatchingPreviousCard(
+          grabbedCard,
+          previousToroCard,
+        );
+        if (matched) {
+          this.#player.dropObject(); // fix card release after attached to toro
+          this.#unoGame.attachCardToMesh(grabbedCard, currentToro);
+
+          emitter.emit("grabbed_object_attached", grabbedCard.uniqueId);
+
+          if (this.#unoGame.getGameState().turn === this.#unoGame.getGameState().maxTurns) {
+            currentToro.material = this.#scene.getMaterialByName("colors_texture");
+
+            await this.#unoGame.endGame();
+            this.openGateDoors();
+
+            return;
+          }
+
+          this.#unoGame.nextTurn(currentToro);
+
+          if (this.#unoGame.getGameState().turn % 2 !== 0) {
+            currentToro = this.#scene.getMeshByName(
+              "toro_gaming." + this.#unoGame.getGameState().turn,
+            ) as Mesh;
+
+            await this.#unoGame.opponentMove(currentToro);
+            this.#unoGame.nextTurn(currentToro);
+          }
+        } else {
+          console.log("grabbed card cant be attached by uno rules");
+
+          return;
+        }
+      }
+    });
+
+    // events
+    emitter.on("player_object_grabbed", (uniqueId) => {
+      this.#sounds.get("cardGrabSound").play();
+
+      const id = uniqueId as number;
+      const card = this.#scene.getMeshByUniqueId(id);
+      card.material = this.#unoGame.getCardMaterialTransparent();
+
+      card.actionManager = new ActionManager(this.#scene);
+
+      const action = new ExecuteCodeAction(
+        {
+          trigger: ActionManager.OnIntersectionEnterTrigger,
+          parameter: this.#scene.getMeshByName("toro_small"),
+        },
+        () => {
+          const toro = this.#scene.getMeshByName("toro_small");
+          if (toro.getChildMeshes().length !== 0) {
+            return; // card already attached to this toro = challenge completed
+          }
+
+          const meshName = "toro_cards_double_plane";
+          const plane = this.#scene.getMeshByName(meshName);
+          plane.dispose();
+          card.material = this.#unoGame.getCardMaterial();
+
+          // fix card release after attached to toro
+          if (card.parent === this.#player.mesh && this.#player.getGrabbedObject() !== undefined) {
+            this.#player.dropObject();
+          }
+
+          this.#unoGame.attachCardToMesh(card, toro);
+
+          // create random two cards and place near the toro
+          const cardNames = this.#unoGame.shuffleDeckOfCardNames(
+            this.#unoGame.getDeckOfRegularCardNames(),
+          );
+
+          let firstRandomCard = this.#unoGame.getDeck()[cardNames[0]];
+          firstRandomCard = firstRandomCard.clone(
+            firstRandomCard.name + "_clone_" + Math.floor(Math.random() * Date.now()),
+          );
+          firstRandomCard.isVisible = true;
+          firstRandomCard.visibility = 0;
+          firstRandomCard.metadata = {
+            isGrabbable: false,
+            isAttachableTo: true,
+            type: "regular",
+            color: firstRandomCard.name.split("_")[1],
+            number: firstRandomCard.name.split("_")[2],
+          };
+
+          let secondRandomCard = this.#unoGame.getDeck()[cardNames[1]];
+          secondRandomCard = secondRandomCard.clone(
+            secondRandomCard.name + "_clone_" + Math.floor(Math.random() * Date.now()),
+          );
+          secondRandomCard.isVisible = true;
+          secondRandomCard.visibility = 0;
+          secondRandomCard.metadata = {
+            isGrabbable: false,
+            isAttachableTo: true,
+            type: "regular",
+            color: secondRandomCard.name.split("_")[1],
+            number: secondRandomCard.name.split("_")[2],
+          };
+
+          const firstPosition = toro.position.clone();
+          firstPosition.z -= 2;
+          firstRandomCard.position = firstPosition;
+
+          const secondPosition = toro.position.clone();
+          secondPosition.z += 2;
+          secondRandomCard.position = secondPosition;
+
+          // animation
+          const frameRate = 20;
+          const cardFadeInAnimation = new Animation(
+            "cardFadeInAnimation",
+            "visibility",
+            frameRate,
+            Animation.ANIMATIONTYPE_FLOAT,
+            Animation.ANIMATIONLOOPMODE_CONSTANT,
+          );
+          const animationKeys = [
+            { frame: 0, value: 0 },
+            { frame: frameRate, value: 1 },
+          ];
+          cardFadeInAnimation.setKeys(animationKeys);
+
+          firstRandomCard.animations.push(cardFadeInAnimation);
+          secondRandomCard.animations.push(cardFadeInAnimation);
+
+          [firstRandomCard, secondRandomCard].forEach((card) => {
+            this.#scene.beginAnimation(card, 0, frameRate, false, 1, () => {
+              card.animations.pop();
+              card.metadata.isGrabbable = true;
+            });
+          });
+
+          card.actionManager.unregisterAction(action);
+          card.actionManager.dispose();
+        },
+      );
+
+      card.actionManager.registerAction(action);
+    });
+
+    emitter.on("player_object_dropping", (uniqueId) => {
+      const id = uniqueId as number;
+      const m = this.#scene.getMeshByUniqueId(id);
+      m.material = this.#unoGame.getCardMaterial();
+      this.#sounds.get("cardDropSound").play();
+    });
+
+    emitter.on("grabbed_object_attached", (uniqueId) => {
+      const id = uniqueId as number;
+      const m = this.#scene.getMeshByUniqueId(id);
+      m.material = this.#unoGame.getCardMaterial();
+    });
+
+    await this.#scene.whenReadyAsync();
+
+    await audioEngine.unlockAsync();
+    this.#sounds.get("bgBirdsSound").play({ loop: true, volume: 1.5 });
+    this.#sounds.get("waterLakeSound").play({ loop: true });
+
+    shadowGenerator.getShadowMap().refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+    sunLight.autoUpdateExtends = false;
+
+    this.watchFrameRate();
+    sceneUI.loopUpdateFpsLabel();
+
+    return this.#scene;
+  }
+
+  private watchFrameRate(): void {
+    const startStabilizationMs = performance.now();
+    console.log("scene loaded at local ts: " + startStabilizationMs * 0.001 + " sec");
+    const deltaAverager = new DeltaTimeAverager(21, 0.05, 21, 7);
+    let spentSec: number = 0;
+
+    const observer = this.#scene.onAfterRenderObservable.add(() => {
+      const dt = this.#scene.getEngine().getDeltaTime() * 0.001;
+      deltaAverager.addSample(dt);
+      spentSec = (performance.now() - startStabilizationMs) * 0.001;
+      if (deltaAverager.isStable) {
+        console.log(
+          `frame stabilized at avg dt: ${deltaAverager.average}, it took: ${spentSec} sec`,
+        );
+        this.#player.loopUpdate();
+        this.#scene.onAfterRenderObservable.remove(observer);
+      }
+
+      if (spentSec >= 5) {
+        this.#scene.onAfterRenderObservable.remove(observer);
+        if (confirm("Sorry, your device is too slow to have a good experience.")) {
+          window.location.reload();
+        } else {
+          window.location.reload();
+        }
+      }
+    });
+  }
+
+  private mergeMeshes(): void {
+    const meshesToMerge = this.#scene.meshes.filter(
       (mesh) => /^chinese_wall\.\d+$/.test(mesh.name) && mesh.getClassName() !== "InstancedMesh",
     );
     const mergedMesh = Mesh.MergeMeshes(meshesToMerge as Mesh[]);
     mergedMesh.name = "merged_chinese_walls";
+  }
+
+  private setupMeshesShadowPhysics(shadowGenerator: ShadowGenerator) {
+    const activeZoneBBoxMesh = this.#scene.getMeshByName("active_zone_bbox") as Mesh;
+    activeZoneBBoxMesh.isPickable = false;
+    activeZoneBBoxMesh.isVisible = false;
+    const bbox = activeZoneBBoxMesh.getBoundingInfo().boundingBox;
 
     const meshesToShadowAndPhys = [
       "gazebo",
@@ -269,7 +560,7 @@ class SecondScene implements CreateSceneClass {
       "merged_chinese_walls",
     ];
     meshesToShadowAndPhys.forEach((name) => {
-      const m = scene.getMeshByName(name) as Mesh;
+      const m = this.#scene.getMeshByName(name) as Mesh;
       if (!m) {
         console.error("mesh not found with name: " + name);
 
@@ -287,7 +578,7 @@ class SecondScene implements CreateSceneClass {
           friction: 1,
           restitution: 0,
         },
-        scene,
+        this.#scene,
       );
     });
 
@@ -303,11 +594,11 @@ class SecondScene implements CreateSceneClass {
       /^flower_yellow_small/,
       /^Rock_SmallJA/,
     ];
-    scene.meshes
+    this.#scene.meshes
       .filter(
         (m) =>
           meshesToShadowReceiversOnlyRegexp.some((regexp) => regexp.test(m.name)) &&
-          activeZoneBBoxMeshBoundingBox.intersectsPoint(m.position),
+          bbox.intersectsPoint(m.position),
       )
       .forEach((m: AbstractMesh) => {
         m.isPickable = false;
@@ -334,11 +625,11 @@ class SecondScene implements CreateSceneClass {
       /^r_letter$/,
       /^congrat_planes$/,
     ];
-    scene.meshes
+    this.#scene.meshes
       .filter(
         (m) =>
           meshesToShadowsRegexp.some((regexp) => regexp.test(m.name)) &&
-          activeZoneBBoxMeshBoundingBox.intersectsPoint(m.position),
+          bbox.intersectsPoint(m.position),
       )
       .forEach((m: AbstractMesh) => {
         m.isPickable = false;
@@ -367,11 +658,11 @@ class SecondScene implements CreateSceneClass {
       /^chinese_wall/,
     ];
 
-    scene.meshes
+    this.#scene.meshes
       .filter(
         (m) =>
           meshesToShadowAndPhysRegexp.some((regexp) => regexp.test(m.name)) &&
-          activeZoneBBoxMeshBoundingBox.intersectsPoint(m.position),
+          bbox.intersectsPoint(m.position),
       )
       .forEach((m: AbstractMesh) => {
         m.receiveShadows = true;
@@ -383,157 +674,12 @@ class SecondScene implements CreateSceneClass {
           m,
           PhysicsShapeType.MESH,
           { mass: 0, friction: 1, restitution: 0 },
-          scene,
+          this.#scene,
         );
       });
-
-    const water = scene.getMeshByName("water_0");
-    water.isPickable = false;
-    water.position.y = 0;
-    water.receiveShadows = true;
-
-    const waterMaterial = new StandardMaterial("waterMat");
-    waterMaterial.diffuseColor = new Color3(0.05, 0.2, 0);
-    waterMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
-    waterMaterial.reflectionTexture = probe.cubeTexture;
-    waterMaterial.reflectionTexture.level = 0.7;
-    waterMaterial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
-    waterMaterial.alpha = 0.8;
-    waterMaterial.disableLighting = true;
-
-    water.material = waterMaterial;
-
-    const water1 = scene.getMeshByName("water_1");
-    water1.isPickable = false;
-    water1.receiveShadows = true;
-    water1.material = waterMaterial;
-
-    const underwaterGround = scene.getMeshByName("underwater_ground");
-    underwaterGround.receiveShadows = true;
-
-    new PhysicsAggregate(
-      underwaterGround,
-      PhysicsShapeType.BOX,
-      { mass: 0, friction: 1, restitution: 0 },
-      scene,
-    );
-
-    const cloudMesh = scene.getMeshByName("cloud_big") as Mesh;
-    cloudMesh.isVisible = false;
-    cloudMesh.isPickable = false;
-    cloudMesh.checkCollisions = false;
-
-    const cloudMatetial = new StandardMaterial("cloudMatetial");
-    cloudMatetial.emissiveColor = new Color3(1, 1, 1);
-    cloudMatetial.alpha = 0.55;
-    cloudMatetial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
-
-    cloudMesh.material = cloudMatetial;
-
-    this.spawnClouds(scene, cloudMesh, 50);
-
-    /**
-     * Postprocess
-     */
-    const defaultPipeline = new DefaultRenderingPipeline("defaultPipeline", true, scene, [
-      scene.activeCamera,
-    ]);
-    defaultPipeline.sharpenEnabled = true;
-    defaultPipeline.sharpen.edgeAmount = 0.2;
-    defaultPipeline.imageProcessingEnabled = true;
-    defaultPipeline.imageProcessing.contrast = 1;
-    defaultPipeline.imageProcessing.exposure = 1;
-    defaultPipeline.imageProcessing.colorGradingEnabled = true;
-
-    const colorGrading = new ColorGradingTexture(lutAsset, scene);
-    defaultPipeline.imageProcessing.colorGradingTexture = colorGrading;
-
-    if (device.isDesktop) {
-      defaultPipeline.samples = 4;
-    } else {
-      defaultPipeline.fxaaEnabled = true;
-      defaultPipeline.samples = 2;
-    }
-
-    const dragonTriggerZone = scene.getMeshByName("dragon_trigger_zone");
-    dragonTriggerZone.checkCollisions = true;
-    dragonTriggerZone.isVisible = false;
-
-    /**
-     * Runtime
-     */
-    scene.onBeforeRenderObservable.add(() => {
-      if (this.#player.mesh.position.y < -10) {
-        this.#player.setPosition(this.playerSpawnPoint);
-      }
-    });
-
-    scene.onBeforeRenderObservable.add(async () => {
-      if (this.#unoGameState.turn === 0 && this.#player.mesh.intersectsMesh(dragonTriggerZone)) {
-        console.log("dragon zone triggered");
-        await this.unoStartGame(scene);
-      }
-    });
-
-    this.setupLODMeshes(scene);
-    await this.setupUnoCards(scene);
-    this.setupToroActivity(scene);
-    this.setupStatueBuddaActivity(scene);
-    this.setupToroHokkuActivity(scene);
-    await this.setupSounds(scene);
-    this.setupOutroSoundAction(scene);
-    this.setupMicrowaveCollision();
-    this.setupSecretPlacesAction(scene);
-    this.setupTorusActivityAnimation(scene);
-    this.setupCakeAction(scene);
-    this.spawnStars(scene);
-    this.setupFinalAction(scene);
-
-    await scene.whenReadyAsync();
-
-    await audioEngine.unlockAsync();
-    this.#sounds.get("bgBirdsSound").play({ loop: true, volume: 1.5 });
-    this.#sounds.get("waterLakeSound").play({ loop: true });
-
-    shadowGenerator.getShadowMap().refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    sunLight.autoUpdateExtends = false;
-
-    this.watchFrameRate(scene);
-    sceneUI.loopUpdateFpsLabel();
-
-    return scene;
   }
 
-  private watchFrameRate(scene: Scene): void {
-    const startStabilizationMs = performance.now();
-    console.log("scene loaded at local ts: " + startStabilizationMs * 0.001 + " sec");
-    const deltaAverager = new DeltaTimeAverager(21, 0.05, 21, 7);
-    let spentSec: number = 0;
-
-    const observer = scene.onAfterRenderObservable.add(() => {
-      const dt = scene.getEngine().getDeltaTime() * 0.001;
-      deltaAverager.addSample(dt);
-      spentSec = (performance.now() - startStabilizationMs) * 0.001;
-      if (deltaAverager.isStable) {
-        console.log(
-          `frame stabilized at avg dt: ${deltaAverager.average}, it took: ${spentSec} sec`,
-        );
-        this.#player.loopUpdate();
-        scene.onAfterRenderObservable.remove(observer);
-      }
-
-      if (spentSec >= 5) {
-        scene.onAfterRenderObservable.remove(observer);
-        if (confirm("Sorry, your device is too slow to have a good experience.")) {
-          window.location.reload();
-        } else {
-          window.location.reload();
-        }
-      }
-    });
-  }
-
-  private setupColorsTextureBlinkingMaterial(scene: Scene, originalMaterial: PBRMaterial): void {
+  private setupColorsTextureBlinkingMaterial(originalMaterial: PBRMaterial): void {
     const colorsTextureMaterialBlink = originalMaterial.clone("colors_texture_blink");
     colorsTextureMaterialBlink.emissiveColor = Color3.Black();
     colorsTextureMaterialBlink.emissiveIntensity = 0.5;
@@ -554,10 +700,10 @@ class SecondScene implements CreateSceneClass {
     colorsTextureMaterialBlinkAnimation.setKeys(blinkAnimationKeys);
     colorsTextureMaterialBlink.animations = [colorsTextureMaterialBlinkAnimation];
 
-    scene.beginAnimation(colorsTextureMaterialBlink, 0, 10, true, 0.5);
+    this.#scene.beginAnimation(colorsTextureMaterialBlink, 0, 10, true, 0.5);
   }
 
-  private setupTorusActivityAnimation(scene: Scene): void {
+  private setupTorusActivityAnimation(): void {
     const activityTorusMat = new StandardMaterial("activityTorusMat");
     activityTorusMat.pointsCloud = true;
     activityTorusMat.pointSize = device.isMobile ? 1.5 : 1;
@@ -581,7 +727,7 @@ class SecondScene implements CreateSceneClass {
     ];
     activityTorusAnimation.setKeys(activityTorusAnimationKeys);
 
-    scene.meshes
+    this.#scene.meshes
       .filter((m) => m.name.includes("activity_torus"))
       .forEach((m) => {
         m.material = activityTorusMat;
@@ -589,45 +735,45 @@ class SecondScene implements CreateSceneClass {
         m.checkCollisions = false;
         m.rotationQuaternion = null;
         m.animations.push(activityTorusAnimation);
-        scene.beginAnimation(m, 0, 10, true, 0.125);
+        this.#scene.beginAnimation(m, 0, 10, true, 0.125);
       });
   }
 
-  private setupFinalGazeboLights(scene: Scene): void {
+  private setupFinalGazeboLights(): void {
     const lanternMat = new StandardMaterial("lanternMat");
     lanternMat.diffuseColor = new Color3(1, 0.95, 0.9);
     lanternMat.backFaceCulling = false;
     lanternMat.emissiveColor = new Color3(0.35, 0.3, 0.25);
 
-    scene.meshes
+    this.#scene.meshes
       .filter((m) => /^lantern\.\d+$/.test(m.name))
       .forEach((m, idx) => {
         m.material = lanternMat;
 
-        const light = new PointLight("lanternPointLight_" + idx, m.position, scene);
+        const light = new PointLight("lanternPointLight_" + idx, m.position, this.#scene);
         light.diffuse = this.#chineseLampColor;
         light.intensity = 0;
         light.falloffType = PointLight.FALLOFF_PHYSICAL;
         light.range = 20;
       });
 
-    const spotOne = scene.getLightByName("Spot");
-    const spotTwo = scene.getLightByName("Spot.001");
+    const spotOne = this.#scene.getLightByName("Spot");
+    const spotTwo = this.#scene.getLightByName("Spot.001");
     spotOne.intensity = 0;
     spotTwo.intensity = 0;
   }
 
-  private spawnStars(scene: Scene): void {
+  private spawnStars(): void {
     const starCount = 100;
     const radius = 800;
     const yCenter = 150;
 
-    const baseStar = MeshBuilder.CreatePlane("star_base", { size: 12 }, scene);
+    const baseStar = MeshBuilder.CreatePlane("star_base", { size: 12 }, this.#scene);
     baseStar.billboardMode = Mesh.BILLBOARDMODE_ALL;
     baseStar.infiniteDistance = true;
     baseStar.isPickable = false;
 
-    const starMat = new StandardMaterial("starMat", scene);
+    const starMat = new StandardMaterial("starMat", this.#scene);
     starMat.emissiveColor = Color3.White();
     starMat.disableLighting = true;
     starMat.alpha = 0;
@@ -655,7 +801,7 @@ class SecondScene implements CreateSceneClass {
     }
   }
 
-  private async changeDaytime(scene: Scene, reverse: boolean): Promise<void> {
+  private async changeDaytime(reverse: boolean): Promise<void> {
     const frameRate = 10;
     const startFrame = reverse ? frameRate : 0;
     const endFrame = reverse ? 0 : frameRate;
@@ -670,7 +816,7 @@ class SecondScene implements CreateSceneClass {
 
     const sunLightStartColor = reverse ? this.#sunLightNightColor : this.#sunLightDayColor;
     const sunLightEndColor = reverse ? this.#sunLightDayColor : this.#sunLightNightColor;
-    const sunLight = scene.getLightByName("sunLight") as DirectionalLight;
+    const sunLight = this.#scene.getLightByName("sunLight") as DirectionalLight;
     const sunLightColorAnimation = new Animation(
       "sunLightColorAnimation",
       "diffuse",
@@ -688,7 +834,7 @@ class SecondScene implements CreateSceneClass {
     sunLightColorAnimation.setKeys(sunLightColorAnimationKeys);
     sunLight.animations.push(sunLightColorAnimation);
 
-    const backlight = scene.getLightByName("backlight") as HemisphericLight;
+    const backlight = this.#scene.getLightByName("backlight") as HemisphericLight;
     const dimBacklightAnimation = new Animation(
       "dimBacklightAnimation",
       "intensity",
@@ -703,7 +849,7 @@ class SecondScene implements CreateSceneClass {
     dimBacklightAnimation.setKeys(dimBacklightKeys);
     backlight.animations.push(dimBacklightAnimation);
 
-    const cloudBig = scene.getMeshByName("cloud_big");
+    const cloudBig = this.#scene.getMeshByName("cloud_big");
     const cloudBigAnimation = new Animation(
       "cloudBigAnimation",
       "material.alpha",
@@ -721,7 +867,7 @@ class SecondScene implements CreateSceneClass {
     cloudBigAnimation.setKeys(cloudBigAnimationKeys);
     cloudBig.animations.push(cloudBigAnimation);
 
-    const skyBoxMesh = scene.getMeshByName("skyBoxMesh");
+    const skyBoxMesh = this.#scene.getMeshByName("skyBoxMesh");
     const skyboxLevelAnimation = new Animation(
       "skyboxLevelAnimation",
       "material.reflectionTexture.level",
@@ -753,7 +899,7 @@ class SecondScene implements CreateSceneClass {
     dimSunLightAnimation.setKeys(dimSunLightKeys);
     sunLight.animations.push(dimSunLightAnimation);
 
-    const starMat = scene.getMaterialByName("starMat") as StandardMaterial;
+    const starMat = this.#scene.getMaterialByName("starMat") as StandardMaterial;
     const starsAnimation = new Animation(
       "starsAnimation",
       "alpha",
@@ -769,7 +915,7 @@ class SecondScene implements CreateSceneClass {
     starsAnimation.setKeys(starsAnimationKeys);
     starMat.animations = [starsAnimation];
 
-    const waterMat = scene.getMaterialByName("waterMat") as StandardMaterial;
+    const waterMat = this.#scene.getMaterialByName("waterMat") as StandardMaterial;
     const waterMatAnimation = new Animation(
       "waterMatAnimation",
       "reflectionTexture.level",
@@ -798,7 +944,7 @@ class SecondScene implements CreateSceneClass {
       { frame: endFrame, value: fogEndColor },
     ];
     fogColorAnimation.setKeys(fogColorKeys);
-    scene.animations.push(fogColorAnimation);
+    this.#scene.animations.push(fogColorAnimation);
 
     const environmentIntensityAnimation = new Animation(
       "environmentIntensityAnimation",
@@ -808,13 +954,13 @@ class SecondScene implements CreateSceneClass {
       Animation.ANIMATIONLOOPMODE_CONSTANT,
     );
     const environmentIntensityKeys = [
-      { frame: 0, value: scene.environmentIntensity },
-      { frame: frameRate, value: scene.environmentIntensity + 2 },
+      { frame: 0, value: this.#scene.environmentIntensity },
+      { frame: frameRate, value: this.#scene.environmentIntensity + 2 },
     ];
     environmentIntensityAnimation.setKeys(environmentIntensityKeys);
-    scene.animations.push(environmentIntensityAnimation);
+    this.#scene.animations.push(environmentIntensityAnimation);
 
-    const sunDisk = scene.getMeshByName("sunDisk");
+    const sunDisk = this.#scene.getMeshByName("sunDisk");
     const sunDiskAnimation = new Animation(
       "sunDiskAnimation",
       "visibility",
@@ -833,42 +979,42 @@ class SecondScene implements CreateSceneClass {
     const batchAnim = async () => {
       const promises = [
         new Promise((resolve) => {
-          scene.beginAnimation(sunLight, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(sunLight, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(backlight, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(backlight, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(scene, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(this.#scene, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(skyBoxMesh, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(skyBoxMesh, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(cloudBig, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(cloudBig, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(starMat, startFrame, endFrame, false, 0.25, () => {
+          this.#scene.beginAnimation(starMat, startFrame, endFrame, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(sunDisk, 0, frameRate, false, 0.25, () => {
+          this.#scene.beginAnimation(sunDisk, 0, frameRate, false, 0.25, () => {
             resolve(true);
           });
         }),
         new Promise((resolve) => {
-          scene.beginAnimation(waterMat, 0, frameRate, false, 0.25, () => {
+          this.#scene.beginAnimation(waterMat, 0, frameRate, false, 0.25, () => {
             resolve(true);
           });
         }),
@@ -881,29 +1027,29 @@ class SecondScene implements CreateSceneClass {
 
     const lightsToOn = ["lanternPointLight_0", "lanternPointLight_1"];
     lightsToOn.forEach((name) => {
-      const light = scene.getLightByName(name) as PointLight;
+      const light = this.#scene.getLightByName(name) as PointLight;
       light.intensity = 15;
     });
 
-    const spotOne = scene.getLightByName("Spot");
-    const spotTwo = scene.getLightByName("Spot.001");
+    const spotOne = this.#scene.getLightByName("Spot");
+    const spotTwo = this.#scene.getLightByName("Spot.001");
     spotOne.intensity = 150;
     spotTwo.intensity = 150;
 
-    const lanternMat = scene.getMaterialByName("lanternMat") as StandardMaterial;
+    const lanternMat = this.#scene.getMaterialByName("lanternMat") as StandardMaterial;
     lanternMat.emissiveColor = new Color3(0.6, 0.4, 0.2);
   }
 
-  private setupCakeAction(scene: Scene): void {
-    const fireworkLight = scene.getLightByName("firework_point_light");
+  private setupCakeAction(): void {
+    const fireworkLight = this.#scene.getLightByName("firework_point_light");
     fireworkLight.intensity = 0;
 
-    const cake = scene.getMeshByName("birthday_cake");
+    const cake = this.#scene.getMeshByName("birthday_cake");
     cake.isPickable = true;
     cake.metadata = {};
     cake.metadata.isTouchable = true;
     cake.metadata.onTouch = async () => {
-      const spawnPoints = scene.transformNodes.filter((node) =>
+      const spawnPoints = this.#scene.transformNodes.filter((node) =>
         /^firework_spawn_point/.test(node.name),
       );
 
@@ -937,7 +1083,7 @@ class SecondScene implements CreateSceneClass {
         }
 
         const randomIndex = Math.floor(Math.random() * shuffled.length);
-        this.fireworkExplode(shuffled[randomIndex].getAbsolutePosition().clone(), scene);
+        this.fireworkExplode(shuffled[randomIndex].getAbsolutePosition().clone(), this.#scene);
 
         this.#sounds.get("fireworkBangSound").play();
 
@@ -1003,8 +1149,8 @@ class SecondScene implements CreateSceneClass {
     }, 2000);
   }
 
-  private setupFinalAction(scene: Scene): void {
-    const finalZoneTriggerBoxMesh = scene.getMeshByName("second_garden_zone_trigger");
+  private setupFinalAction(): void {
+    const finalZoneTriggerBoxMesh = this.#scene.getMeshByName("second_garden_zone_trigger");
     finalZoneTriggerBoxMesh.isVisible = false;
     finalZoneTriggerBoxMesh.isPickable = true;
 
@@ -1016,19 +1162,21 @@ class SecondScene implements CreateSceneClass {
       async () => {
         this.#player.mesh.actionManager.unregisterAction(finalZoneAction);
 
-        await this.changeDaytime(scene, false);
+        await this.changeDaytime(false);
       },
     );
 
     this.#player.mesh.actionManager.registerAction(finalZoneAction);
   }
 
-  private setupSecretPlacesAction(scene: Scene): void {
+  private setupSecretPlacesAction(): void {
     if (!this.#player.mesh.actionManager) {
-      this.#player.mesh.actionManager = new ActionManager(scene);
+      this.#player.mesh.actionManager = new ActionManager(this.#scene);
     }
 
-    const triggerMeshes = scene.meshes.filter((m) => m.name.includes("secret_place_trigger_box"));
+    const triggerMeshes = this.#scene.meshes.filter((m) =>
+      m.name.includes("secret_place_trigger_box"),
+    );
     triggerMeshes.forEach((triggerMesh) => {
       triggerMesh.isVisible = false;
       triggerMesh.isPickable = true;
@@ -1048,12 +1196,12 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private setupOutroSoundAction(scene: Scene): void {
+  private setupOutroSoundAction(): void {
     if (!this.#player.mesh.actionManager) {
-      this.#player.mesh.actionManager = new ActionManager(scene);
+      this.#player.mesh.actionManager = new ActionManager(this.#scene);
     }
 
-    const squareGazeboTriggerBox = scene.getMeshByName("square_gazebo_trigger_box");
+    const squareGazeboTriggerBox = this.#scene.getMeshByName("square_gazebo_trigger_box");
     squareGazeboTriggerBox.isVisible = false;
     squareGazeboTriggerBox.isPickable = true;
 
@@ -1086,7 +1234,7 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private async setupSounds(scene: Scene): Promise<void> {
+  private async setupSounds(): Promise<void> {
     const soundPromises = [
       this.#audioEngine.createSoundAsync("bgBirdsSound", bgBirdsAudio).then((sound) => {
         this.#sounds.set("bgBirdsSound", sound);
@@ -1106,7 +1254,7 @@ class SecondScene implements CreateSceneClass {
         })
         .then((sound) => {
           this.#sounds.set("waterLakeSound", sound);
-          sound.spatial.attach(scene.getMeshByName("gazebo"));
+          sound.spatial.attach(this.#scene.getMeshByName("gazebo"));
         }),
 
       this.#audioEngine
@@ -1214,13 +1362,13 @@ class SecondScene implements CreateSceneClass {
     });
   }
 
-  private setupStatueBuddaActivity(scene: Scene): void {
-    const statueBudda = scene.getMeshByName("statue_budda") as Mesh;
+  private setupStatueBuddaActivity(): void {
+    const statueBudda = this.#scene.getMeshByName("statue_budda") as Mesh;
     statueBudda.metadata = {};
     statueBudda.metadata.isTouchable = true;
-    statueBudda.metadata.onTouch = function () {
+    statueBudda.metadata.onTouch = () => {
       const meshName = "statue_budda_plane";
-      if (scene.getMeshByName(meshName) !== null) {
+      if (this.#scene.getMeshByName(meshName) !== null) {
         // create once
 
         return;
@@ -1263,9 +1411,9 @@ class SecondScene implements CreateSceneClass {
     return random.lines.join("\n");
   }
 
-  private setupToroHokkuActivity(scene: Scene): void {
+  private setupToroHokkuActivity(): void {
     const hokkuHideTimeout = 10000;
-    const toroSmall001 = scene.getMeshByName("toro_small.001") as Mesh;
+    const toroSmall001 = this.#scene.getMeshByName("toro_small.001") as Mesh;
     toroSmall001.metadata = {};
     toroSmall001.metadata.isTouchable = true;
 
@@ -1316,7 +1464,7 @@ class SecondScene implements CreateSceneClass {
     };
 
     // toro_big
-    const toroBig = scene.getMeshByName("toro_big") as Mesh;
+    const toroBig = this.#scene.getMeshByName("toro_big") as Mesh;
     toroBig.metadata = {};
     toroBig.metadata.isTouchable = true;
 
@@ -1363,8 +1511,8 @@ class SecondScene implements CreateSceneClass {
     };
   }
 
-  private setupToroActivity(scene: Scene): void {
-    const toro = scene.getMeshByName("toro_small") as Mesh;
+  private setupToroActivity(): void {
+    const toro = this.#scene.getMeshByName("toro_small") as Mesh;
     toro.metadata = {};
     toro.metadata.isTouchable = true;
 
@@ -1374,7 +1522,7 @@ class SecondScene implements CreateSceneClass {
     }
 
     const meshName = "toro_cards_double_plane";
-    if (scene.getMeshByName(meshName) !== null) {
+    if (this.#scene.getMeshByName(meshName) !== null) {
       // create once
       return;
     }
@@ -1398,99 +1546,20 @@ class SecondScene implements CreateSceneClass {
 
     adt.addControl(text);
 
-    toro.metadata.onTouch = function () {
+    toro.metadata.onTouch = () => {
       plane.isVisible = true;
     };
   }
 
-  private unoCheckCardIsMatchingPreviousCard(card: Mesh, previousToroCard: Mesh): boolean {
-    const previousType = previousToroCard.metadata.type;
-    if (previousType === "wild" || card.metadata.type === "wild") {
-      return true;
-    }
-
-    if (previousType === "regular") {
-      const previousNumber = previousToroCard.metadata.number;
-      const previousColor = previousToroCard.metadata.color;
-
-      return card.metadata.color === previousColor || card.metadata.number === previousNumber;
-    }
-
-    throw new Error("unknown previous card type: " + previousType);
-  }
-
-  private unoNextTurn(scene: Scene, currentToro: Mesh): void {
-    ++this.#unoGameState.turn;
-
-    console.log("turn changed to", this.#unoGameState.turn);
-
-    currentToro.material = scene.getMaterialByName("colors_texture");
-
-    const nextToro = scene.getMeshByName("toro_gaming." + this.#unoGameState.turn);
-    nextToro.material = scene.getMaterialByName("colors_texture_blink");
-    nextToro.edgesColor = new Color4(1, 1, 1, 1);
-  }
-
-  private unoGetNextMatchingCard(scene: Scene, previousToroCard: Mesh): Mesh {
-    const previousNumber = previousToroCard.metadata.number;
-    const previousColor = previousToroCard.metadata.color;
-    let matchingCard;
-
-    // todo previousToroCard.metadata.type === "wild";
-    if (previousToroCard.metadata.type === "wild") {
-      matchingCard = this.getRandomRegularUnoCard(scene);
-    }
-
-    // same number but a different color
-    if (!matchingCard) {
-      matchingCard = scene.meshes.find(
-        (mesh) =>
-          /^card_(yellow|red|blue|green)_[0-9]_clone_\d+$/.test(mesh.name) &&
-          mesh.isVisible &&
-          mesh.metadata.isGrabbable === true &&
-          mesh.metadata.number === previousNumber &&
-          mesh.metadata.color !== previousColor,
-      ) as Mesh;
-    }
-
-    // same color but a different number
-    if (!matchingCard) {
-      matchingCard = scene.meshes.find(
-        (mesh) =>
-          /^card_(yellow|red|blue|green)_[0-9]_clone_\d+$/.test(mesh.name) &&
-          mesh.isVisible &&
-          mesh.metadata.isGrabbable === true &&
-          mesh.metadata.color === previousColor &&
-          mesh.metadata.number !== previousNumber,
-      ) as Mesh;
-    }
-
-    // or get a wild card
-    if (!matchingCard) {
-      matchingCard = scene.meshes.find(
-        (mesh) =>
-          /^card_wild_clone_\d+$/.test(mesh.name) &&
-          mesh.metadata.isGrabbable === true &&
-          mesh.isVisible,
-      ) as Mesh;
-    }
-
-    if (!matchingCard) {
-      throw new Error("no matching card found. It's a bug.");
-    }
-
-    return matchingCard;
-  }
-
-  private openGateDoors(scene: Scene): void {
+  private openGateDoors(): void {
     console.log("open doors");
 
     const frameRate = 10;
     const easingFunction = new SineEase();
     easingFunction.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
 
-    const oldDoorTall = scene.getMeshByName("old_door_tall") as Mesh;
-    const oldDoorTallReversed = scene.getMeshByName("old_door_tall_reversed") as Mesh;
+    const oldDoorTall = this.#scene.getMeshByName("old_door_tall") as Mesh;
+    const oldDoorTallReversed = this.#scene.getMeshByName("old_door_tall_reversed") as Mesh;
 
     if (!oldDoorTall || !oldDoorTallReversed) {
       console.error("Door meshes not found");
@@ -1541,459 +1610,15 @@ class SecondScene implements CreateSceneClass {
 
     this.#sounds.get("doorsScreamSound").play();
 
-    scene.beginAnimation(oldDoorTall, 0, frameRate, false, 0.5, () => {
+    this.#scene.beginAnimation(oldDoorTall, 0, frameRate, false, 0.5, () => {
       oldDoorTall.physicsBody.disablePreStep = true;
     });
-    scene.beginAnimation(oldDoorTallReversed, 0, frameRate, false, 0.5, () => {
+    this.#scene.beginAnimation(oldDoorTallReversed, 0, frameRate, false, 0.5, () => {
       oldDoorTallReversed.physicsBody.disablePreStep = true;
     });
   }
 
-  private async unoEndGame(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const sound = this.#sounds.get("unoGameEndSound");
-      sound.onEndedObservable.addOnce(() => {
-        const id = setTimeout(() => {
-          this.#dragonTextBlock.text = "Found! Come in!";
-          resolve(true);
-          clearTimeout(id);
-        }, 3000);
-      });
-      this.#sounds.get("unoGameEndSound").play();
-      this.#dragonTextBlock.text =
-        "Too be doo be dooo, ough I forgot where my keys for the doors...";
-    });
-  }
-
-  private attachUnoCardToToro(card: AbstractMesh, toroMesh: AbstractMesh): void {
-    card.setParent(toroMesh);
-    card.position = this.calcCardToroPosition(card, toroMesh);
-    card.rotation.y = -(Math.PI * 90) / 180;
-    card.metadata.isGrabbable = false; // don't grab attached card
-    card.visibility = 1;
-
-    this.#sounds.get("cardAttachedToToroSound").play({ volume: 1.5 });
-  }
-
-  private calcCardToroPosition(card: AbstractMesh, toroMesh: AbstractMesh): Vector3 {
-    const maxY =
-      toroMesh.getBoundingInfo().maximum.y + card.getBoundingInfo().boundingBox.maximum.y + 0.5;
-
-    return new Vector3(0, maxY, 0);
-  }
-
-  private async unoOpponentMove(scene: Scene, currentToro: Mesh): Promise<void> {
-    console.log("opponent move");
-
-    let card;
-    if (this.#unoGameState.turn === 1) {
-      card = this.getRandomRegularUnoCard(scene);
-    } else {
-      const previousToro = scene.getMeshByName(
-        "toro_gaming." + (this.#unoGameState.turn - 1),
-      ) as Mesh;
-      const previousToroCard = previousToro.getChildren()[0] as Mesh;
-      card = this.unoGetNextMatchingCard(scene, previousToroCard);
-    }
-
-    if (!card) {
-      throw new Error("no matching card found. Bug");
-    }
-
-    const cardEndPosition = this.calcCardToroPosition(card, currentToro);
-    const toroPosition = currentToro.position.clone();
-    toroPosition.addInPlace(cardEndPosition);
-
-    await this.animateCardFly(scene, card, toroPosition);
-
-    this.attachUnoCardToToro(card, currentToro);
-
-    if (this.#unoGameState.turn !== 1 && this.#unoGameState.turn % 2 !== 0) {
-      const randomIndex = Math.floor(Math.random() * this.#dragonTextReplicas.length);
-      this.#dragonTextBlock.text = this.#dragonTextReplicas[randomIndex];
-    }
-  }
-
-  private async animateCardFly(scene: Scene, card: Mesh, endPosition: Vector3): Promise<boolean> {
-    return new Promise((resolve) => {
-      const frameRate = 20;
-      const easingFunction = new SineEase();
-      easingFunction.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
-      const cardFlyAnimation = new Animation(
-        "cardFlyAnimation",
-        "position",
-        frameRate,
-        Animation.ANIMATIONTYPE_VECTOR3,
-        Animation.ANIMATIONLOOPMODE_CONSTANT,
-      );
-      const animationKeys = [
-        { frame: 0, value: card.position.clone() },
-        { frame: frameRate, value: endPosition },
-      ];
-      cardFlyAnimation.setEasingFunction(easingFunction);
-      cardFlyAnimation.setKeys(animationKeys);
-
-      card.animations.push(cardFlyAnimation);
-
-      scene.beginAnimation(card, 0, frameRate, false, 0.5, () => {
-        card.animations.pop();
-        resolve(true);
-      });
-    });
-  }
-
-  private async unoStartGame(scene: Scene): Promise<void> {
-    this.#unoGameState.turn = 1;
-
-    console.log("uno game started");
-
-    this.#sounds.get("gardenIntroSound").play({ volume: 0.5 });
-
-    const dragon = scene.getMeshByName("dragon");
-    const dragonPlane = MeshBuilder.CreatePlane("dragon_plane", { size: 5 });
-    dragonPlane.isVisible = true;
-    dragonPlane.billboardMode = TransformNode.BILLBOARDMODE_ALL;
-    dragonPlane.position = dragon.position.clone();
-    dragonPlane.position.y += 2.25;
-
-    const adt = AdvancedDynamicTexture.CreateForMesh(dragonPlane, 1024, 1024);
-    this.#dragonTextBlock = new TextBlock(
-      "dragon_text_plane",
-      "Hey Rodion! You like candies? No? Doesn't matter. You have to play with me! One UNO party, please!",
-    );
-    this.#dragonTextBlock.textWrapping = true;
-    this.#dragonTextBlock.fontSize = 76;
-    this.#dragonTextBlock.color = "white";
-
-    adt.addControl(this.#dragonTextBlock);
-
-    const toroMeshNames = [
-      "toro_gaming.1",
-      "toro_gaming.2",
-      "toro_gaming.3",
-      "toro_gaming.4",
-      "toro_gaming.5",
-      "toro_gaming.6",
-    ];
-    // just initial setup
-    toroMeshNames.forEach((name) => {
-      const toroMesh = scene.getMeshByName(name) as Mesh;
-      const splittedName = name.split(".");
-      toroMesh.metadata = {
-        isSlot: true,
-        slotNumber: Number(splittedName[1]),
-      };
-    });
-
-    const currentToro = scene.getMeshByName("toro_gaming.1") as Mesh;
-    await this.unoOpponentMove(scene, currentToro);
-    this.unoNextTurn(scene, currentToro);
-
-    scene.onBeforeRenderObservable.add(async () => {
-      if (this.#unoGameState.turn === 0) {
-        return;
-      }
-
-      if (this.#player.getGrabbedObject() === undefined) {
-        return;
-      }
-
-      let currentToro = scene.getMeshByName("toro_gaming." + this.#unoGameState.turn) as Mesh;
-      const grabbedCard = this.#player.getGrabbedObject();
-
-      if (grabbedCard.intersectsMesh(currentToro)) {
-        const previousToro = scene.getMeshByName("toro_gaming." + (this.#unoGameState.turn - 1));
-        const previousToroCard = previousToro.getChildren()[0] as Mesh;
-        const matched = this.unoCheckCardIsMatchingPreviousCard(grabbedCard, previousToroCard);
-        if (matched) {
-          this.#player.dropObject(); // fix card release after attached to toro
-          this.attachUnoCardToToro(grabbedCard, currentToro);
-
-          emitter.emit("grabbed_object_attached", grabbedCard.uniqueId);
-
-          if (this.#unoGameState.turn === this.#unoGameState.maxTurns) {
-            currentToro.material = scene.getMaterialByName("colors_texture");
-
-            await this.unoEndGame();
-            this.openGateDoors(scene);
-
-            return;
-          }
-
-          this.unoNextTurn(scene, currentToro);
-
-          if (this.#unoGameState.turn % 2 !== 0) {
-            currentToro = scene.getMeshByName("toro_gaming." + this.#unoGameState.turn) as Mesh;
-
-            await this.unoOpponentMove(scene, currentToro);
-            this.unoNextTurn(scene, currentToro);
-          }
-        } else {
-          console.log("grabbed card cant be attached by uno rules");
-
-          return;
-        }
-      }
-    });
-  }
-
-  private getRandomRegularUnoCard(scene: Scene): Mesh {
-    const regularUnoCards = scene.meshes.filter(
-      (mesh) =>
-        /^card_(yellow|red|blue|green)_[0-9]_clone_\d+$/.test(mesh.name) &&
-        mesh.isVisible &&
-        mesh.parent === null, // not attached to toro and not is grabbed (grabbing use parenting)
-    );
-    const randomIndex = Math.floor(Math.random() * regularUnoCards.length);
-
-    console.log("random uno card picked: ", regularUnoCards[randomIndex].name);
-
-    return regularUnoCards[randomIndex] as Mesh;
-  }
-
-  private async setupUnoCards(scene: Scene): Promise<void> {
-    const texture = new Texture(unoCardsAtlas, scene);
-    const cardMat = new StandardMaterial("cardMat", scene);
-    cardMat.diffuseTexture = texture;
-    cardMat.backFaceCulling = false;
-    cardMat.specularColor = Color3.Black();
-    cardMat.emissiveColor = Color3.White();
-    cardMat.disableLighting = true;
-    cardMat.useAlphaFromDiffuseTexture = true;
-    cardMat.diffuseTexture.hasAlpha = true;
-    cardMat.transparencyMode = StandardMaterial.MATERIAL_ALPHATEST;
-
-    const cardMatTrans = cardMat.clone("cardMatTrans");
-    cardMatTrans.alpha = 0.5;
-    cardMatTrans.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
-
-    const cardBase = MeshBuilder.CreatePlane("uno_card_base", { width: 0.86, height: 1.4 }, scene);
-    cardBase.isVisible = false;
-    cardBase.material = cardMat;
-
-    const cols = 13;
-    const rows = 8.43;
-    const cellW = 1 / cols;
-    const cellH = 1 / rows;
-
-    function setCardUV(mesh: Mesh, col: number, row: number) {
-      const uvs = mesh.getVerticesData(VertexBuffer.UVKind)!;
-      const newUVs: number[] = [];
-      const startU = col * cellW;
-      const startV = 1 - (row + 1) * cellH;
-
-      for (let i = 0; i < uvs.length; i += 2) {
-        const u = uvs[i];
-        const v = uvs[i + 1];
-        newUVs.push(startU + u * cellW, startV + v * cellH);
-      }
-
-      mesh.setVerticesData(VertexBuffer.UVKind, newUVs, true);
-    }
-
-    const colorRows: Record<string, number> = {
-      yellow: 1,
-      red: 2,
-      blue: 3,
-      green: 4,
-    };
-    for (const [color, row] of Object.entries(colorRows)) {
-      for (let n = 0; n <= 9; n++) {
-        const name = `card_${color}_${n}`;
-        const mesh = cardBase.clone(name) as Mesh;
-        mesh.material = cardMat;
-        mesh.makeGeometryUnique();
-        setCardUV(mesh, n, row);
-        mesh.isVisible = false;
-        this.#unoDeck[name] = mesh;
-      }
-    }
-
-    const wild = cardBase.clone("card_wild") as Mesh;
-    wild.material = cardMat;
-    wild.makeGeometryUnique();
-    setCardUV(wild, 1, 0);
-    wild.isVisible = false;
-    this.#unoDeck["card_wild"] = wild;
-
-    const spawnPoints = scene.transformNodes.filter((n) => /^card_spawn_point/.test(n.name));
-    const secretSpawnPoints = scene.transformNodes.filter((n) =>
-      /^card_secret_spawn_point/.test(n.name),
-    );
-
-    this.#deckOfRegularUnoCardNames = this.buildDeckOfRegularUnoCards(this.#unoDeck);
-    let cardNames = this.shuffleDeckOfCardNames(this.#deckOfRegularUnoCardNames);
-
-    // repeat if needed to cover all spawnPoints
-    while (cardNames.length < spawnPoints.length) {
-      cardNames.push(...cardNames);
-    }
-    cardNames.length = spawnPoints.length;
-
-    spawnPoints.forEach((pt, i) => {
-      const cardName = cardNames[i];
-      const tmpl = this.#unoDeck[cardName];
-      const inst = tmpl.clone(`${cardName}_clone_${i}`);
-
-      inst.isVisible = true;
-      inst.isPickable = true;
-      inst.setAbsolutePosition(pt.getAbsolutePosition());
-      inst.rotation.y = Math.random() * Math.PI;
-      inst.metadata = {
-        type: "regular",
-        color: cardName.split("_")[1],
-        number: cardName.split("_")[2],
-        isGrabbable: true,
-      };
-    });
-
-    secretSpawnPoints.forEach((pt, i) => {
-      const inst = wild.clone(`card_wild_clone_${i}`);
-      inst.isVisible = true;
-      inst.isPickable = true;
-      inst.setAbsolutePosition(pt.getAbsolutePosition());
-      inst.rotation.y = Math.random() * Math.PI;
-      inst.metadata = { type: "wild", isGrabbable: true };
-    });
-
-    // setup events
-    emitter.on("player_object_grabbed", (uniqueId) => {
-      this.#sounds.get("cardGrabSound").play();
-
-      const id = uniqueId as number;
-      const card = scene.getMeshByUniqueId(id);
-      card.material = cardMatTrans;
-
-      card.actionManager = new ActionManager(scene);
-
-      const action = new ExecuteCodeAction(
-        {
-          trigger: ActionManager.OnIntersectionEnterTrigger,
-          parameter: scene.getMeshByName("toro_small"),
-        },
-        () => {
-          const toro = scene.getMeshByName("toro_small");
-          if (toro.getChildMeshes().length !== 0) {
-            return; // card already attached to this toro = challenge completed
-          }
-
-          const meshName = "toro_cards_double_plane";
-          const plane = scene.getMeshByName(meshName);
-          plane.dispose();
-          card.material = cardMat;
-
-          // fix card release after attached to toro
-          if (card.parent === this.#player.mesh && this.#player.getGrabbedObject() !== undefined) {
-            this.#player.dropObject();
-          }
-
-          this.attachUnoCardToToro(card, toro);
-
-          // create random two cards and place near the toro
-          const cardNames = this.shuffleDeckOfCardNames(this.#deckOfRegularUnoCardNames);
-
-          let firstRandomCard = this.#unoDeck[cardNames[0]];
-          firstRandomCard = firstRandomCard.clone(
-            firstRandomCard.name + "_clone_" + Math.floor(Math.random() * Date.now()),
-          );
-          firstRandomCard.isVisible = true;
-          firstRandomCard.visibility = 0;
-          firstRandomCard.metadata = {
-            isGrabbable: false,
-            isAttachableTo: true,
-            type: "regular",
-            color: firstRandomCard.name.split("_")[1],
-            number: firstRandomCard.name.split("_")[2],
-          };
-
-          let secondRandomCard = this.#unoDeck[cardNames[1]];
-          secondRandomCard = secondRandomCard.clone(
-            secondRandomCard.name + "_clone_" + Math.floor(Math.random() * Date.now()),
-          );
-          secondRandomCard.isVisible = true;
-          secondRandomCard.visibility = 0;
-          secondRandomCard.metadata = {
-            isGrabbable: false,
-            isAttachableTo: true,
-            type: "regular",
-            color: secondRandomCard.name.split("_")[1],
-            number: secondRandomCard.name.split("_")[2],
-          };
-
-          const firstPosition = toro.position.clone();
-          firstPosition.z -= 2;
-          firstRandomCard.position = firstPosition;
-
-          const secondPosition = toro.position.clone();
-          secondPosition.z += 2;
-          secondRandomCard.position = secondPosition;
-
-          // animation
-          const frameRate = 20;
-          const cardFadeInAnimation = new Animation(
-            "cardFadeInAnimation",
-            "visibility",
-            frameRate,
-            Animation.ANIMATIONTYPE_FLOAT,
-            Animation.ANIMATIONLOOPMODE_CONSTANT,
-          );
-          const animationKeys = [
-            { frame: 0, value: 0 },
-            { frame: frameRate, value: 1 },
-          ];
-          cardFadeInAnimation.setKeys(animationKeys);
-
-          firstRandomCard.animations.push(cardFadeInAnimation);
-          secondRandomCard.animations.push(cardFadeInAnimation);
-
-          [firstRandomCard, secondRandomCard].forEach((card) => {
-            scene.beginAnimation(card, 0, frameRate, false, 1, () => {
-              card.animations.pop();
-              card.metadata.isGrabbable = true;
-            });
-          });
-
-          card.actionManager.unregisterAction(action);
-          card.actionManager.dispose();
-        },
-      );
-
-      card.actionManager.registerAction(action);
-    });
-
-    emitter.on("player_object_dropping", (uniqueId) => {
-      const id = uniqueId as number;
-      const m = scene.getMeshByUniqueId(id);
-      m.material = cardMat;
-      this.#sounds.get("cardDropSound").play();
-    });
-
-    emitter.on("grabbed_object_attached", (uniqueId) => {
-      const id = uniqueId as number;
-      const m = scene.getMeshByUniqueId(id);
-      m.material = cardMat;
-    });
-  }
-
-  private buildDeckOfRegularUnoCards(unoDeck: { [name: string]: Mesh }): string[] {
-    let cardNames: string[] = [];
-    Object.keys(unoDeck).forEach((name) => {
-      if (name !== "card_wild") {
-        cardNames.push(name);
-      }
-    });
-
-    return cardNames;
-  }
-
-  private shuffleDeckOfCardNames(cardNames: string[]): string[] {
-    return cardNames
-      .map((n) => ({ n, r: Math.random() }))
-      .sort((a, b) => a.r - b.r)
-      .map((o) => o.n);
-  }
-
-  private spawnClouds(scene: Scene, baseCloud: Mesh, count: number): void {
+  private spawnClouds(baseCloud: Mesh, count: number): void {
     const cloudsData: {
       mesh: InstancedMesh;
       speedZ: number;
@@ -2042,26 +1667,27 @@ class SecondScene implements CreateSceneClass {
       ];
       animation.setKeys(keyFrames);
       cloudClone.animations.push(animation);
-      scene.beginAnimation(cloudClone, 0, duration, true);
+
+      this.#scene.beginAnimation(cloudClone, 0, duration, true);
     }
   }
 
-  private setupLODMeshes(scene: Scene): void {
-    const grass2JA = scene.getMeshByName("Grass_2JA") as Mesh;
+  private setupLODMeshes(): void {
+    const grass2JA = this.#scene.getMeshByName("Grass_2JA") as Mesh;
     grass2JA.setEnabled(false);
-    const grass2JALOD = scene.getMeshByName("Grass_2JA_LOD") as Mesh;
+    const grass2JALOD = this.#scene.getMeshByName("Grass_2JA_LOD") as Mesh;
     grass2JA.addLODLevel(45, grass2JALOD);
     grass2JA.addLODLevel(120, null);
 
-    const treeTallBigBark = scene.getMeshByName("tree_tall_big_bark") as Mesh;
-    const treeTallBigLeafs = scene.getMeshByName("tree_tall_big_leafs") as Mesh;
-    const treeTallBigBarkLOD1 = scene.getMeshByName("tree_tall_big_bark_LOD1") as Mesh;
-    const treeTallBigLOD2 = scene.getMeshByName("tree_tall_big_LOD2") as Mesh;
+    const treeTallBigBark = this.#scene.getMeshByName("tree_tall_big_bark") as Mesh;
+    const treeTallBigLeafs = this.#scene.getMeshByName("tree_tall_big_leafs") as Mesh;
+    const treeTallBigBarkLOD1 = this.#scene.getMeshByName("tree_tall_big_bark_LOD1") as Mesh;
+    const treeTallBigLOD2 = this.#scene.getMeshByName("tree_tall_big_LOD2") as Mesh;
     (treeTallBigLOD2.material as PBRMaterial).useAlphaFromAlbedoTexture = true;
     (treeTallBigLOD2.material as PBRMaterial).albedoTexture.hasAlpha = true;
     (treeTallBigLOD2.material as PBRMaterial).roughness = 1.0;
     (treeTallBigLOD2.material as PBRMaterial).transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
-    const treeTallBigLeafsLOD1 = scene.getMeshByName("tree_tall_big_leafs_LOD1") as Mesh;
+    const treeTallBigLeafsLOD1 = this.#scene.getMeshByName("tree_tall_big_leafs_LOD1") as Mesh;
     treeTallBigBark.setEnabled(false);
     treeTallBigLeafs.setEnabled(false);
     treeTallBigLOD2.setEnabled(false);
@@ -2070,35 +1696,57 @@ class SecondScene implements CreateSceneClass {
     treeTallBigLeafs.addLODLevel(60, treeTallBigLeafsLOD1);
     treeTallBigLeafs.addLODLevel(150.5, null);
 
-    const treeBig1Bark = scene.getMeshByName("tree_big_1_bark") as Mesh;
-    const treeBig1Leafs = scene.getMeshByName("tree_big_1_leafs") as Mesh;
-    const treeBig1BarkLOD1 = scene.getMeshByName("tree_big_1_bark_LOD1") as Mesh;
-    const treeBig1LeafsLOD1 = scene.getMeshByName("tree_big_1_leafs_LOD1") as Mesh;
+    const treeBig1Bark = this.#scene.getMeshByName("tree_big_1_bark") as Mesh;
+    const treeBig1Leafs = this.#scene.getMeshByName("tree_big_1_leafs") as Mesh;
+    const treeBig1BarkLOD1 = this.#scene.getMeshByName("tree_big_1_bark_LOD1") as Mesh;
+    const treeBig1LeafsLOD1 = this.#scene.getMeshByName("tree_big_1_leafs_LOD1") as Mesh;
     treeBig1Bark.setEnabled(false);
     treeBig1Leafs.setEnabled(false);
     treeBig1Bark.addLODLevel(45, treeBig1BarkLOD1);
     treeBig1Leafs.addLODLevel(45, treeBig1LeafsLOD1);
 
-    const bushSphereBigLight = scene.getMeshByName("bush_sphere_big_light") as Mesh;
-    const bushSphereBigLightLOD1 = scene.getMeshByName("bush_sphere_big_light_LOD1") as Mesh;
+    const bushSphereBigLight = this.#scene.getMeshByName("bush_sphere_big_light") as Mesh;
+    const bushSphereBigLightLOD1 = this.#scene.getMeshByName("bush_sphere_big_light_LOD1") as Mesh;
     bushSphereBigLight.setEnabled(false);
     bushSphereBigLight.addLODLevel(45, bushSphereBigLightLOD1);
 
-    const bushSphereMidDark = scene.getMeshByName("bush_sphere_mid_dark") as Mesh;
-    const bushSphereMidDarkLOD1 = scene.getMeshByName("bush_sphere_mid_dark_LOD1") as Mesh;
+    const bushSphereMidDark = this.#scene.getMeshByName("bush_sphere_mid_dark") as Mesh;
+    const bushSphereMidDarkLOD1 = this.#scene.getMeshByName("bush_sphere_mid_dark_LOD1") as Mesh;
     bushSphereMidDark.setEnabled(false);
     bushSphereMidDark.addLODLevel(45, bushSphereMidDarkLOD1);
 
-    const bushSphereMidLight = scene.getMeshByName("bush_sphere_mid_light") as Mesh;
-    const bushSphereMidLightLOD1 = scene.getMeshByName("bush_sphere_mid_light_LOD1") as Mesh;
+    const bushSphereMidLight = this.#scene.getMeshByName("bush_sphere_mid_light") as Mesh;
+    const bushSphereMidLightLOD1 = this.#scene.getMeshByName("bush_sphere_mid_light_LOD1") as Mesh;
     bushSphereMidLight.setEnabled(false);
     bushSphereMidLight.addLODLevel(45, bushSphereMidLightLOD1);
 
-    const plateOneLevel = scene.getMeshByName("plate_one_level") as Mesh;
-    const plateOneLevelLOD1 = scene.getMeshByName("plate_one_level_LOD1") as Mesh;
+    const plateOneLevel = this.#scene.getMeshByName("plate_one_level") as Mesh;
+    const plateOneLevelLOD1 = this.#scene.getMeshByName("plate_one_level_LOD1") as Mesh;
     plateOneLevel.setEnabled(false);
     plateOneLevel.addLODLevel(45, plateOneLevelLOD1);
   }
+
+  private setupRenderingPipeline(): void {
+    const pipeline = new DefaultRenderingPipeline("defaultPipeline", true, this.#scene, [
+      this.#scene.activeCamera,
+    ]);
+    pipeline.sharpenEnabled = true;
+    pipeline.sharpen.edgeAmount = 0.2;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.contrast = 1;
+    pipeline.imageProcessing.exposure = 1;
+    pipeline.imageProcessing.colorGradingEnabled = true;
+
+    const colorGrading = new ColorGradingTexture(lutAsset, this.#scene);
+    pipeline.imageProcessing.colorGradingTexture = colorGrading;
+
+    if (device.isDesktop) {
+      pipeline.samples = 4;
+    } else {
+      pipeline.fxaaEnabled = true;
+      pipeline.samples = 2;
+    }
+  }
 }
 
-export default new SecondScene();
+export default new UnoGardenScene();
