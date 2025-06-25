@@ -162,7 +162,7 @@ class UnoGardenScene implements GameScene {
     skyboxMaterial.disableLighting = true;
     skyBoxMesh.material = skyboxMaterial;
 
-    await Promise.all([AppendSceneAsync(unoGardenGlb, this.#scene)]);
+    await AppendSceneAsync(unoGardenGlb, this.#scene);
 
     // fix gltf to bjs coordinate system
     const rootNode = this.#scene.getNodeByName("__root__");
@@ -179,98 +179,15 @@ class UnoGardenScene implements GameScene {
     shadowGenerator.usePercentageCloserFiltering = true;
     shadowGenerator.transparencyShadow = true;
 
-    const groundMesh = this.#scene.getMeshByName("ground");
-    groundMesh.receiveShadows = true;
-    groundMesh.checkCollisions = true;
-    groundMesh.isPickable = true;
-    groundMesh.freezeWorldMatrix();
-    new PhysicsAggregate(
-      groundMesh,
-      PhysicsShapeType.MESH,
-      {
-        mass: 0,
-        friction: 1,
-        restitution: 0,
-      },
-      this.#scene,
-    );
-    shadowGenerator.addShadowCaster(groundMesh);
-
-    const colorsTextureMaterial = this.#scene.getMaterialByName("colors_texture") as PBRMaterial;
-    colorsTextureMaterial.roughness = 0.95;
-    colorsTextureMaterial.maxSimultaneousLights = 10;
-    colorsTextureMaterial.freeze();
-
-    const probe = new ReflectionProbe("mainProbe", 128, this.#scene);
-    probe.position = new Vector3(0, 10, 0);
-    probe.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    probe.renderList.push(skyBoxMesh);
-
-    colorsTextureMaterial.reflectionTexture = probe.cubeTexture;
-
-    this.setupColorsTextureBlinkingMaterial(colorsTextureMaterial);
-
-    const groundBigMesh = this.#scene.getMeshByName("ground_big");
-    groundBigMesh.receiveShadows = true;
-    groundBigMesh.checkCollisions = false;
-    groundBigMesh.isPickable = false;
-    groundBigMesh.freezeWorldMatrix();
-
+    this.setupGroundStuff(shadowGenerator, skyBoxMesh);
     this.mergeMeshes();
     this.setupMeshesShadowPhysics(shadowGenerator);
-
-    const water = this.#scene.getMeshByName("water_0");
-    water.isPickable = false;
-    water.position.y = 0;
-    water.receiveShadows = true;
-
-    const waterMaterial = new StandardMaterial("waterMat");
-    waterMaterial.diffuseColor = new Color3(0.05, 0.2, 0);
-    waterMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
-    waterMaterial.reflectionTexture = probe.cubeTexture;
-    waterMaterial.reflectionTexture.level = 0.7;
-    waterMaterial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
-    waterMaterial.alpha = 0.8;
-    waterMaterial.disableLighting = true;
-
-    water.material = waterMaterial;
-
-    const water1 = this.#scene.getMeshByName("water_1");
-    water1.isPickable = false;
-    water1.receiveShadows = true;
-    water1.material = waterMaterial;
-
-    const underwaterGround = this.#scene.getMeshByName("underwater_ground");
-    underwaterGround.receiveShadows = true;
-
-    new PhysicsAggregate(
-      underwaterGround,
-      PhysicsShapeType.BOX,
-      { mass: 0, friction: 1, restitution: 0 },
-      this.#scene,
-    );
-
-    const cloudMesh = this.#scene.getMeshByName("cloud_big") as Mesh;
-    cloudMesh.isVisible = false;
-    cloudMesh.isPickable = false;
-    cloudMesh.checkCollisions = false;
-
-    const cloudMatetial = new StandardMaterial("cloudMatetial");
-    cloudMatetial.emissiveColor = new Color3(1, 1, 1);
-    cloudMatetial.alpha = 0.55;
-    cloudMatetial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
-
-    cloudMesh.material = cloudMatetial;
-
-    const dragonTriggerZone = this.#scene.getMeshByName("dragon_trigger_zone");
-    dragonTriggerZone.checkCollisions = true;
-    dragonTriggerZone.isVisible = false;
 
     this.#unoGame = new UnoGame(this.#scene, this.#sounds);
     this.#unoGame.init();
 
     this.setupRenderingPipeline();
-    this.spawnClouds(cloudMesh, 50);
+    this.setupClouds();
     this.setupLODMeshes();
     this.setupToroActivity();
     this.setupStatueBuddaActivity();
@@ -281,15 +198,66 @@ class UnoGardenScene implements GameScene {
     this.setupSecretPlacesAction();
     this.setupTorusActivityAnimation();
     this.setupCakeAction();
-    this.spawnStars();
+    this.setupStars();
     this.setupFinalAction();
 
-    // runtime logic
+    this.setupRuntimeObservables();
+    this.setupEmitterEvents();
+
+    await this.#scene.whenReadyAsync();
+
+    await audioEngine.unlockAsync();
+    this.#sounds.get("bgBirdsSound").play({ loop: true, volume: 1.5 });
+    this.#sounds.get("waterLakeSound").play({ loop: true });
+
+    shadowGenerator.getShadowMap().refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+    sunLight.autoUpdateExtends = false;
+
+    this.watchFrameRate();
+    sceneUI.loopUpdateFpsLabel();
+
+    return this.#scene;
+  }
+
+  private watchFrameRate(): void {
+    const startStabilizationMs = performance.now();
+    console.log("scene loaded at local ts: " + startStabilizationMs * 0.001 + " sec");
+    const deltaAverager = new DeltaTimeAverager(21, 0.05, 21, 7);
+    let spentSec: number = 0;
+
+    const observer = this.#scene.onAfterRenderObservable.add(() => {
+      const dt = this.#scene.getEngine().getDeltaTime() * 0.001;
+      deltaAverager.addSample(dt);
+      spentSec = (performance.now() - startStabilizationMs) * 0.001;
+      if (deltaAverager.isStable) {
+        console.log(
+          `frame stabilized at avg dt: ${deltaAverager.average}, it took: ${spentSec} sec`,
+        );
+        this.#player.loopUpdate();
+        this.#scene.onAfterRenderObservable.remove(observer);
+      }
+
+      if (spentSec >= 5) {
+        this.#scene.onAfterRenderObservable.remove(observer);
+        if (confirm("Sorry, your device is too slow to have a good experience.")) {
+          window.location.reload();
+        } else {
+          window.location.reload();
+        }
+      }
+    });
+  }
+
+  private setupRuntimeObservables(): void {
     this.#scene.onBeforeRenderObservable.add(() => {
       if (this.#player.mesh.position.y < -10) {
         this.#player.setPosition(this.playerSpawnPoint);
       }
     });
+
+    const dragonTriggerZone = this.#scene.getMeshByName("dragon_trigger_zone");
+    dragonTriggerZone.checkCollisions = true;
+    dragonTriggerZone.isVisible = false;
 
     this.#scene.onBeforeRenderObservable.add(async () => {
       if (
@@ -356,8 +324,9 @@ class UnoGardenScene implements GameScene {
         }
       }
     });
+  }
 
-    // events
+  private setupEmitterEvents(): void {
     emitter.on("player_object_grabbed", (uniqueId) => {
       this.#sounds.get("cardGrabSound").play();
 
@@ -477,47 +446,8 @@ class UnoGardenScene implements GameScene {
       m.material = this.#unoGame.getCardMaterial();
     });
 
-    await this.#scene.whenReadyAsync();
-
-    await audioEngine.unlockAsync();
-    this.#sounds.get("bgBirdsSound").play({ loop: true, volume: 1.5 });
-    this.#sounds.get("waterLakeSound").play({ loop: true });
-
-    shadowGenerator.getShadowMap().refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    sunLight.autoUpdateExtends = false;
-
-    this.watchFrameRate();
-    sceneUI.loopUpdateFpsLabel();
-
-    return this.#scene;
-  }
-
-  private watchFrameRate(): void {
-    const startStabilizationMs = performance.now();
-    console.log("scene loaded at local ts: " + startStabilizationMs * 0.001 + " sec");
-    const deltaAverager = new DeltaTimeAverager(21, 0.05, 21, 7);
-    let spentSec: number = 0;
-
-    const observer = this.#scene.onAfterRenderObservable.add(() => {
-      const dt = this.#scene.getEngine().getDeltaTime() * 0.001;
-      deltaAverager.addSample(dt);
-      spentSec = (performance.now() - startStabilizationMs) * 0.001;
-      if (deltaAverager.isStable) {
-        console.log(
-          `frame stabilized at avg dt: ${deltaAverager.average}, it took: ${spentSec} sec`,
-        );
-        this.#player.loopUpdate();
-        this.#scene.onAfterRenderObservable.remove(observer);
-      }
-
-      if (spentSec >= 5) {
-        this.#scene.onAfterRenderObservable.remove(observer);
-        if (confirm("Sorry, your device is too slow to have a good experience.")) {
-          window.location.reload();
-        } else {
-          window.location.reload();
-        }
-      }
+    emitter.on("player_touched_touchable_object", () => {
+      this.#sounds.get("touchObjectSound").play({ volume: 0.75 });
     });
   }
 
@@ -527,6 +457,92 @@ class UnoGardenScene implements GameScene {
     );
     const mergedMesh = Mesh.MergeMeshes(meshesToMerge as Mesh[]);
     mergedMesh.name = "merged_chinese_walls";
+  }
+
+  private setupClouds(): void {
+    const cloudMesh = this.#scene.getMeshByName("cloud_big") as Mesh;
+    cloudMesh.isVisible = false;
+    cloudMesh.isPickable = false;
+    cloudMesh.checkCollisions = false;
+
+    const cloudMatetial = new StandardMaterial("cloudMatetial");
+    cloudMatetial.emissiveColor = new Color3(1, 1, 1);
+    cloudMatetial.alpha = 0.55;
+    cloudMatetial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
+
+    cloudMesh.material = cloudMatetial;
+
+    this.spawnClouds(cloudMesh, 50);
+  }
+
+  private setupGroundStuff(shadowGenerator: ShadowGenerator, skyBoxMesh: Mesh): void {
+    const groundMesh = this.#scene.getMeshByName("ground");
+    groundMesh.receiveShadows = true;
+    groundMesh.checkCollisions = true;
+    groundMesh.isPickable = true;
+    groundMesh.freezeWorldMatrix();
+    new PhysicsAggregate(
+      groundMesh,
+      PhysicsShapeType.MESH,
+      {
+        mass: 0,
+        friction: 1,
+        restitution: 0,
+      },
+      this.#scene,
+    );
+    shadowGenerator.addShadowCaster(groundMesh);
+
+    const colorsTextureMaterial = this.#scene.getMaterialByName("colors_texture") as PBRMaterial;
+    colorsTextureMaterial.roughness = 0.95;
+    colorsTextureMaterial.maxSimultaneousLights = 10;
+    colorsTextureMaterial.freeze();
+
+    const probe = new ReflectionProbe("mainProbe", 128, this.#scene);
+    probe.position = new Vector3(0, 10, 0);
+    probe.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+    probe.renderList.push(skyBoxMesh);
+
+    colorsTextureMaterial.reflectionTexture = probe.cubeTexture;
+
+    this.setupColorsTextureBlinkingMaterial(colorsTextureMaterial);
+
+    const groundBigMesh = this.#scene.getMeshByName("ground_big");
+    groundBigMesh.receiveShadows = true;
+    groundBigMesh.checkCollisions = false;
+    groundBigMesh.isPickable = false;
+    groundBigMesh.freezeWorldMatrix();
+
+    const waterMesh0 = this.#scene.getMeshByName("water_0");
+    waterMesh0.isPickable = false;
+    waterMesh0.position.y = 0;
+    waterMesh0.receiveShadows = true;
+
+    const waterMaterial = new StandardMaterial("waterMat");
+    waterMaterial.diffuseColor = new Color3(0.05, 0.2, 0);
+    waterMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
+    waterMaterial.reflectionTexture = probe.cubeTexture;
+    waterMaterial.reflectionTexture.level = 0.7;
+    waterMaterial.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
+    waterMaterial.alpha = 0.8;
+    waterMaterial.disableLighting = true;
+
+    waterMesh0.material = waterMaterial;
+
+    const waterMesh1 = this.#scene.getMeshByName("water_1");
+    waterMesh1.isPickable = false;
+    waterMesh1.receiveShadows = true;
+    waterMesh1.material = waterMaterial;
+
+    const underwaterGround = this.#scene.getMeshByName("underwater_ground");
+    underwaterGround.receiveShadows = true;
+
+    new PhysicsAggregate(
+      underwaterGround,
+      PhysicsShapeType.BOX,
+      { mass: 0, friction: 1, restitution: 0 },
+      this.#scene,
+    );
   }
 
   private setupMeshesShadowPhysics(shadowGenerator: ShadowGenerator) {
@@ -763,7 +779,7 @@ class UnoGardenScene implements GameScene {
     spotTwo.intensity = 0;
   }
 
-  private spawnStars(): void {
+  private setupStars(): void {
     const starCount = 100;
     const radius = 800;
     const yCenter = 150;
@@ -1356,10 +1372,6 @@ class UnoGardenScene implements GameScene {
     ];
 
     await Promise.all(soundPromises);
-
-    emitter.on("player_touched_touchable_object", () => {
-      this.#sounds.get("touchObjectSound").play({ volume: 0.75 });
-    });
   }
 
   private setupStatueBuddaActivity(): void {
