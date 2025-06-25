@@ -141,6 +141,12 @@ class UnoGardenScene implements GameScene {
     backlight.groundColor = new Color3(0.5, 0.5, 0.5);
     backlight.intensity = 0.2;
 
+    const shadowGenerator = new ShadowGenerator(2048, sunLight);
+    shadowGenerator.bias = 0.004;
+    shadowGenerator.normalBias = 0.0015;
+    shadowGenerator.usePercentageCloserFiltering = true;
+    shadowGenerator.transparencyShadow = true;
+
     const envTexture = CubeTexture.CreateFromImages(
       [cubePX, cubePY, cubePZ, cubeNX, cubeNY, cubeNZ],
       this.#scene,
@@ -172,13 +178,6 @@ class UnoGardenScene implements GameScene {
     rootNode.dispose();
 
     this.setupFinalGazeboLights(); // this is must be before all other code
-
-    const shadowGenerator = new ShadowGenerator(2048, sunLight);
-    shadowGenerator.bias = 0.004;
-    shadowGenerator.normalBias = 0.0015;
-    shadowGenerator.usePercentageCloserFiltering = true;
-    shadowGenerator.transparencyShadow = true;
-
     this.setupGroundStuff(shadowGenerator, skyBoxMesh);
     this.mergeMeshes();
     this.setupMeshesShadowPhysics(shadowGenerator);
@@ -205,8 +204,8 @@ class UnoGardenScene implements GameScene {
     this.setupEmitterEvents();
 
     await this.#scene.whenReadyAsync();
-
     await audioEngine.unlockAsync();
+
     this.#sounds.get("bgBirdsSound").play({ loop: true, volume: 1.5 });
     this.#sounds.get("waterLakeSound").play({ loop: true });
 
